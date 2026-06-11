@@ -260,7 +260,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
     <div id="loading-track"><div id="loading-bar"></div></div>
     <div id="loading-text">Connecting&hellip;</div>
   </div>
-  <div id="splash-ver">v1.1</div>
+  <div id="splash-ver">v1.2</div>
 </div>
 
 <!-- ══ LOCK SCREEN ══ -->
@@ -387,12 +387,38 @@ function setSplashStatus(msg) {
   var el = document.getElementById('loading-text');
   if (el) el.textContent = msg;
 }
+
+function splashError(msg) {
+  var bar = document.getElementById('loading-bar');
+  if (bar) { bar.style.animation = 'none'; bar.style.width = '100%'; bar.style.background = '#ff3300'; }
+  setSplashStatus(msg);
+  var el = document.getElementById('loading-text');
+  if (el) el.style.color = '#ff3300';
+  var wrap = document.getElementById('loading-wrap');
+  if (wrap && !document.getElementById('splash-retry')) {
+    var btn = document.createElement('button');
+    btn.id = 'splash-retry';
+    btn.textContent = 'RETRY';
+    btn.style.cssText = 'margin-top:12px;padding:8px 28px;background:transparent;border:1.5px solid #ffd700;color:#ffd700;font-size:11px;letter-spacing:2px;border-radius:20px;cursor:pointer;display:block;';
+    btn.onclick = function() {
+      var b = document.getElementById('loading-bar');
+      if (b) { b.style.animation = ''; b.style.width = '0%'; b.style.background = ''; }
+      var lt = document.getElementById('loading-text');
+      if (lt) lt.style.color = '';
+      var r = document.getElementById('splash-retry');
+      if (r && r.parentNode) r.parentNode.removeChild(r);
+      initSupabase();
+    };
+    wrap.appendChild(btn);
+  }
+}
 function killSplash() {
   var sp = document.getElementById('splash');
   if (!sp) return;
-  sp.classList.add('fade-out');
+  sp.style.transition = 'opacity 0.8s ease';
+  sp.style.opacity = '0';
   setTimeout(function() {
-    sp.style.display = 'none';
+    if (sp && sp.parentNode) sp.parentNode.removeChild(sp);
     var ls = document.getElementById('lock-screen');
     if (ls) ls.classList.add('show');
   }, 850);
@@ -410,8 +436,7 @@ function initSupabase() {
       /* Test connection by fetching one record */
       _client.from('game_history').select('id').limit(1).then(function(res) {
         if (res.error) {
-          setSplashStatus('DB error: ' + res.error.message);
-          setTimeout(initSupabase, 5000);
+          splashError('DB error: ' + res.error.message);
           return;
         }
         _connected = true;
@@ -423,11 +448,10 @@ function initSupabase() {
         setTimeout(killSplash, 800);
       });
     } catch(e) {
-      setSplashStatus('Init error: ' + e.message);
-      setTimeout(initSupabase, 5000);
+      splashError('Init error: ' + e.message);
     }
   };
-  s.onerror = function() { setSplashStatus('SDK load failed \u2014 retrying\u2026'); setTimeout(initSupabase, 5000); };
+  s.onerror = function() { splashError('SDK load failed'); };
   document.head.appendChild(s);
 }
 
@@ -1145,7 +1169,7 @@ function renderSettings(el) {
   html += '<div class="section">';
   html += '<div class="sec-title">&#8505; About</div>';
   html += '<div style="font-size:10px;color:var(--dim);line-height:1.9;">';
-  html += 'Floor Manager v1.1<br>';
+  html += 'Floor Manager v1.2<br>';
   html += 'Gold Coins Casino &bull; Stray-Pup LLC<br>';
   html += 'Games: StrayPups $1 &bull; StrayPups $5<br>';
   html += 'History: 24-hour rolling window<br>';
@@ -1203,9 +1227,7 @@ if ('serviceWorker' in navigator) {
 
 /* ── INIT ── */
 initSupabase();
-setTimeout(function() {
-  if (document.getElementById('splash').style.display !== 'none') killSplash();
-}, 10000);
+/* No fallback killSplash — error state requires user to press RETRY */
 </script>
 </body>
 </html>
