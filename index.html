@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#05000f">
+  <meta name="apple-mobile-web-app-title" content="Floor Manager">
+  <link rel="manifest" href="manifest.json">
+  <title>Floor Manager — Gold Coins Casino</title>
+<style>
+:root {
+  --gold:    #ffd700;
+  --gold-dk: #b8860b;
+  --green:   #00ff88;
+  --blue:    #00cfff;
+  --red:     #ff3300;
+  --orange:  #ff8800;
+  --bg:      #05000f;
+  --bg2:     #0d0022;
+  --bg3:     #150035;
+  --border:  #2a0055;
+  --text:    #e8d8ff;
+  --dim:     #776688;
+  --danger:  #ff2244;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,sans-serif;overflow:hidden;}
+
+/* ── SPLASH ── */
+#splash{
+  position:fixed;inset:0;z-index:9999;
+  background:radial-gradient(ellipse at center,#1a0030 0%,#05000f 70%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:opacity .8s ease;
+}
+#splash.fade-out{opacity:0;pointer-events:none;touch-action:none;z-index:-1;}
+#splash::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.12) 3px,rgba(0,0,0,.12) 4px);}
+.star{position:absolute;border-radius:50%;background:#ffd700;
+  animation:twinkle var(--d) ease-in-out infinite var(--delay);}
+@keyframes twinkle{0%,100%{opacity:.2;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
+#splash-icon{font-size:64px;margin-bottom:16px;filter:drop-shadow(0 0 20px rgba(255,215,0,.5));}
+#splash-title{font-size:clamp(10px,3vw,13px);letter-spacing:4px;color:rgba(212,175,55,.5);
+  text-transform:uppercase;margin-bottom:4px;}
+#splash-name{font-size:clamp(24px,7vw,36px);font-weight:900;color:var(--gold);
+  text-align:center;line-height:1.1;letter-spacing:2px;
+  text-shadow:0 0 12px #ff8800,0 0 24px #ff4400;margin-bottom:4px;}
+#splash-sub{font-size:clamp(8px,2.5vw,11px);letter-spacing:3px;color:rgba(212,175,55,.4);
+  text-transform:uppercase;margin-bottom:28px;}
+#loading-wrap{width:180px;margin-bottom:12px;}
+#loading-track{height:3px;background:rgba(212,175,55,.15);border-radius:2px;overflow:hidden;}
+#loading-bar{height:100%;width:0%;
+  background:linear-gradient(90deg,#ff4400,#ffd700);
+  border-radius:2px;
+  animation:load-fill 2.2s cubic-bezier(.4,0,.2,1) forwards .3s;
+  box-shadow:0 0 8px #ff8800;}
+@keyframes load-fill{from{width:0%}to{width:100%}}
+#loading-text{text-align:center;font-size:8px;color:#332244;letter-spacing:2px;
+  margin-top:6px;text-transform:uppercase;animation:blink .8s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:.4}50%{opacity:1}}
+#splash-ver{position:absolute;bottom:14px;font-size:9px;color:#1a1133;letter-spacing:2px;}
+
+/* ── LOCK SCREEN ── */
+#lock-screen{
+  position:fixed;inset:0;background:var(--bg);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  z-index:10000;gap:16px;
+}
+#lock-screen.show{display:flex;}
+#lock-title{font-size:13px;letter-spacing:3px;color:var(--gold);text-transform:uppercase;}
+#lock-logo{font-size:28px;font-weight:900;color:var(--gold);
+  text-shadow:0 0 12px #ff8800;letter-spacing:2px;text-align:center;line-height:1.2;}
+#lock-sub{font-size:10px;color:var(--dim);letter-spacing:2px;}
+#pin-dots{display:flex;gap:10px;margin:8px 0;}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--gold-dk);
+  background:transparent;transition:background .15s;}
+.pin-dot.filled{background:var(--gold);}
+#pin-error{color:var(--danger);font-size:11px;height:14px;}
+#username-field{width:200px;padding:10px 12px;background:#0d0d1a;
+  border:1.5px solid var(--gold-dk);border-radius:8px;
+  color:var(--gold);font-size:13px;text-align:center;outline:none;letter-spacing:1px;}
+#username-field::placeholder{color:var(--dim);letter-spacing:1px;}
+#username-field:focus{border-color:var(--gold);}
+#pin-grid{display:grid;grid-template-columns:repeat(3,64px);gap:10px;}
+.pkey{height:56px;border-radius:10px;border:1.5px solid var(--border);
+  background:var(--bg2);color:var(--text);font-size:20px;font-weight:bold;
+  cursor:pointer;transition:background .1s,transform .08s;
+  display:flex;align-items:center;justify-content:center;}
+.pkey:active{background:var(--bg3);transform:scale(.94);}
+.pkey.wide{grid-column:span 2;font-size:13px;letter-spacing:1px;color:var(--dim);}
+.pkey.enter{background:linear-gradient(135deg,#3a2800,#886600);color:var(--gold);font-size:13px;}
+
+/* ── APP ── */
+#app{display:none;flex-direction:column;height:100%;}
+#app.visible{display:flex;}
+
+/* ── HEADER ── */
+#app-hdr{
+  background:linear-gradient(135deg,#0a0010,#200040);
+  border-bottom:1.5px solid var(--gold-dk);
+  padding:10px 14px 8px;flex-shrink:0;
+}
+#app-hdr-top{display:flex;justify-content:space-between;align-items:center;}
+#app-title{font-size:11px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;}
+#conn-badge{font-size:9px;padding:2px 8px;border-radius:10px;letter-spacing:1px;}
+#conn-badge.ok{background:#003300;color:var(--green);border:1px solid #006600;}
+#conn-badge.err{background:#330000;color:var(--danger);border:1px solid #660000;}
+#floor-operator{font-size:9px;color:var(--dim);margin-top:2px;letter-spacing:1px;}
+
+/* ── TABS ── */
+#tab-bar{display:flex;border-bottom:1.5px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.tab{flex:1;padding:9px 2px;text-align:center;font-size:9px;
+  letter-spacing:.5px;text-transform:uppercase;color:var(--dim);
+  cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+
+/* ── CONTENT ── */
+#tab-content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;}
+
+/* ── SECTIONS ── */
+.section{margin-bottom:18px;}
+.sec-title{font-size:9px;letter-spacing:2px;color:var(--gold-dk);
+  text-transform:uppercase;margin-bottom:8px;padding-bottom:4px;
+  border-bottom:1px solid var(--border);}
+
+/* ── STATS GRID ── */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:10px;text-align:center;}
+.stat-val{font-size:20px;font-weight:900;color:var(--gold);font-family:'Arial Black',Arial,sans-serif;}
+.stat-val.green{color:var(--green);}
+.stat-val.orange{color:var(--orange);}
+.stat-val.red{color:var(--red);}
+.stat-lbl{font-size:8px;color:var(--dim);letter-spacing:1px;margin-top:2px;text-transform:uppercase;}
+
+/* ── GAME CARDS ── */
+.game-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;
+  padding:12px;margin-bottom:10px;}
+.game-card-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.game-card-name{font-size:13px;font-weight:bold;color:var(--gold);letter-spacing:1px;}
+.game-card-badge{font-size:8px;padding:2px 8px;border-radius:8px;letter-spacing:1px;}
+.game-card-badge.live{background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.3);color:var(--green);}
+.game-card-badge.idle{background:rgba(255,136,0,.1);border:1px solid rgba(255,136,0,.3);color:var(--orange);}
+.game-stats-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;}
+.gs-item{text-align:center;}
+.gs-val{font-size:14px;font-weight:900;color:var(--gold);}
+.gs-lbl{font-size:7px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;}
+
+/* ── HISTORY RECORDS ── */
+.rec-row{background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:8px 10px;margin-bottom:6px;cursor:pointer;transition:border-color .15s;}
+.rec-row:active{transform:scale(.99);}
+.rec-row.spin{border-left:3px solid var(--gold-dk);}
+.rec-row.spin.win{border-left-color:var(--green);}
+.rec-row.spin.jp{border-left-color:#ff4400;}
+.rec-row.cash-in{border-left:3px solid var(--blue);}
+.rec-row.cash-out{border-left:3px solid var(--green);}
+.rec-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;}
+.rec-type{font-size:11px;font-weight:bold;letter-spacing:1px;color:var(--gold);}
+.rec-type.win{color:var(--green);}
+.rec-type.jp{color:#ff8800;}
+.rec-type.cash-in{color:var(--blue);}
+.rec-type.cash-out{color:var(--green);}
+.rec-time{font-size:9px;color:var(--dim);}
+.rec-detail{font-size:9px;color:rgba(255,255,255,.55);line-height:1.7;}
+.rec-detail span{color:rgba(212,175,55,.7);}
+.rec-expand{display:none;margin-top:8px;padding-top:8px;
+  border-top:1px solid var(--border);font-size:9px;
+  color:rgba(255,255,255,.55);line-height:1.9;}
+.rec-expand span{color:rgba(212,175,55,.7);}
+.rec-row.open .rec-expand{display:block;}
+
+/* ── PLAYER CARDS ── */
+.player-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:10px 12px;margin-bottom:8px;cursor:pointer;}
+.player-card-hdr{display:flex;justify-content:space-between;align-items:center;}
+.player-name{font-size:14px;font-weight:bold;color:var(--gold);}
+.player-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.player-dot.active{background:var(--green);box-shadow:0 0 6px var(--green);}
+.player-dot.idle{background:var(--orange);}
+.player-meta{font-size:9px;color:var(--dim);margin-top:3px;}
+.player-expand{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+.player-card.open .player-expand{display:block;}
+.player-game-section{margin-bottom:10px;}
+.player-game-title{font-size:10px;font-weight:bold;color:var(--gold);margin-bottom:5px;letter-spacing:1px;}
+.player-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;}
+.player-stat{font-size:9px;color:rgba(255,255,255,.55);}
+.player-stat span{color:var(--gold);}
+.pattern-tags{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;}
+.ptag{font-size:7px;padding:1px 6px;border-radius:8px;
+  background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.2);color:rgba(212,175,55,.7);}
+
+/* ── SEARCH ── */
+#player-search{width:100%;padding:9px 12px;background:var(--bg2);
+  border:1.5px solid var(--border);border-radius:8px;
+  color:var(--gold);font-size:13px;outline:none;letter-spacing:.5px;margin-bottom:12px;}
+#player-search::placeholder{color:var(--dim);}
+#player-search:focus{border-color:var(--gold-dk);}
+
+/* ── LIVE FEED ── */
+.feed-row{display:flex;gap:8px;align-items:center;padding:5px 0;
+  border-bottom:1px solid rgba(255,255,255,.05);}
+.feed-row:last-child{border-bottom:none;}
+.feed-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.feed-text{font-size:10px;color:rgba(255,255,255,.6);flex:1;min-width:0;}
+.feed-text strong{color:var(--gold);}
+.feed-time{font-size:8px;color:var(--dim);flex-shrink:0;}
+
+/* ── BUTTONS ── */
+.btn{padding:10px 16px;border-radius:8px;border:none;font-size:11px;
+  font-weight:bold;letter-spacing:1px;text-transform:uppercase;
+  cursor:pointer;transition:transform .08s,opacity .1s;-webkit-appearance:none;}
+.btn:active{transform:scale(.94);opacity:.85;}
+.btn-gold{background:linear-gradient(135deg,#3a2800,#b8860b);color:var(--gold);border:1px solid var(--gold-dk);}
+.btn-green{background:linear-gradient(135deg,#003a00,#006600);color:var(--green);border:1px solid #00aa44;}
+.btn-blue{background:linear-gradient(135deg,#00001a,#002266);color:var(--blue);border:1px solid #004499;}
+.btn-danger{background:linear-gradient(135deg,#3a0010,#660022);color:var(--danger);border:1px solid #aa0033;}
+.btn-full{width:100%;margin-top:8px;padding:12px;font-size:12px;}
+
+/* ── GAME SELECTOR ── */
+.game-sel{display:flex;gap:8px;margin-bottom:14px;}
+.game-sel-btn{flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--border);
+  background:var(--bg2);color:var(--dim);font-size:10px;letter-spacing:1px;
+  text-transform:uppercase;cursor:pointer;text-align:center;transition:all .15s;-webkit-appearance:none;}
+.game-sel-btn.active{background:rgba(212,175,55,.1);border-color:var(--gold-dk);color:var(--gold);}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--bg2);border:1.5px solid var(--gold-dk);border-radius:20px;
+  padding:8px 20px;font-size:12px;color:var(--gold);
+  transition:transform .3s ease;z-index:999;pointer-events:none;white-space:nowrap;}
+#toast.on{transform:translateX(-50%) translateY(0);}
+
+/* ── EMPTY STATE ── */
+.empty-state{text-align:center;padding:40px 20px;color:var(--dim);font-size:12px;letter-spacing:1px;}
+</style>
+</head>
+<body>
+
+<!-- ══ SPLASH ══ -->
+<div id="splash">
+  <div class="star" style="width:2px;height:2px;top:8%;left:12%;--d:2.1s;--delay:0s"></div>
+  <div class="star" style="width:3px;height:3px;top:15%;left:75%;--d:3.4s;--delay:.3s"></div>
+  <div class="star" style="width:2px;height:2px;top:22%;left:45%;--d:2.8s;--delay:.8s"></div>
+  <div class="star" style="width:3px;height:3px;top:35%;left:88%;--d:2.2s;--delay:.1s"></div>
+  <div class="star" style="width:2px;height:2px;top:55%;left:5%;--d:3.1s;--delay:.6s"></div>
+  <div class="star" style="width:4px;height:4px;top:72%;left:20%;--d:2.6s;--delay:.4s"></div>
+  <div class="star" style="width:2px;height:2px;top:80%;left:60%;--d:2.9s;--delay:.9s"></div>
+  <div id="splash-icon">&#127922;</div>
+  <div id="splash-title">Stray-Pup LLC</div>
+  <div id="splash-name">FLOOR<br>MANAGER</div>
+  <div id="splash-sub">Gold Coins Casino</div>
+  <div id="loading-wrap">
+    <div id="loading-track"><div id="loading-bar"></div></div>
+    <div id="loading-text">Connecting&hellip;</div>
+  </div>
+  <div id="splash-ver">v1.0</div>
+</div>
+
+<!-- ══ LOCK SCREEN ══ -->
+<div id="lock-screen">
+  <div id="lock-title">Stray-Pup LLC</div>
+  <div id="lock-logo">FLOOR<br>MANAGER</div>
+  <div id="lock-sub">ENTER USERNAME &amp; PIN</div>
+  <input id="username-field" type="text" placeholder="Your name" maxlength="24"
+    autocomplete="off" spellcheck="false">
+  <div id="pin-dots">
+    <div class="pin-dot" id="d0"></div>
+    <div class="pin-dot" id="d1"></div>
+    <div class="pin-dot" id="d2"></div>
+    <div class="pin-dot" id="d3"></div>
+  </div>
+  <div id="pin-error"></div>
+  <div id="pin-grid">
+    <button class="pkey" onclick="pk('1')">1</button>
+    <button class="pkey" onclick="pk('2')">2</button>
+    <button class="pkey" onclick="pk('3')">3</button>
+    <button class="pkey" onclick="pk('4')">4</button>
+    <button class="pkey" onclick="pk('5')">5</button>
+    <button class="pkey" onclick="pk('6')">6</button>
+    <button class="pkey" onclick="pk('7')">7</button>
+    <button class="pkey" onclick="pk('8')">8</button>
+    <button class="pkey" onclick="pk('9')">9</button>
+    <button class="pkey wide" onclick="pkClear()">CLEAR</button>
+    <button class="pkey" onclick="pk('0')">0</button>
+    <button class="pkey enter" onclick="pkEnter()">OK</button>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ══ -->
+<div id="app">
+  <div id="app-hdr">
+    <div id="app-hdr-top">
+      <div id="app-title">&#127922; Floor Manager</div>
+      <div id="conn-badge" class="err">OFFLINE</div>
+    </div>
+    <div id="floor-operator">Floor: &mdash;</div>
+  </div>
+
+  <div id="tab-bar">
+    <div class="tab active" onclick="showTab('dashboard')">&#128202; Dashboard</div>
+    <div class="tab" onclick="showTab('games')">&#127918; Games</div>
+    <div class="tab" onclick="showTab('players')">&#128100; Players</div>
+    <div class="tab" onclick="showTab('settings')">&#9881; Settings</div>
+  </div>
+
+  <div id="tab-content"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   FLOOR MANAGER v1.0
+   Stray-Pup LLC / The Turrelle Sisters LLC
+   Gold Coins Casino
+   ══════════════════════════════════════════════════════════════════════ */
+
+var SUPABASE_URL      = 'https://gdmmoeggkqsvqnqyrubx.supabase.co';
+var SUPABASE_ANON_KEY = 'sb_publishable_NGsKBAUUsVUvD5XKTblIdw_aBDPldSd';
+var FLOOR_PIN         = '7777'; /* Change to your preferred PIN */
+
+var GAMES = {
+  'straypups_1d': { title: 'StrayPups Big Munny $1', denom: 1.00,  color: '#ffd700' },
+  'straypups_5d': { title: 'StrayPups Big Munny $5', denom: 5.00,  color: '#ff8800' }
+};
+
+/* ── State ── */
+var _client         = null;
+var _connected      = false;
+var _operatorName   = 'operator';
+var _pinBuf         = '';
+var _activeTab      = 'dashboard';
+var _selectedGame   = 'straypups_1d';
+var _history        = [];        /* cached game_history records */
+var _presenceState  = {};
+var _liveFeed       = [];        /* last 20 events for dashboard feed */
+var _autoRefresh    = null;
+var _autoRefreshMs  = 30000;
+var _realtimeCh     = null;
+var _presenceCh     = null;
+var _openRecIdx     = -1;
+var _openPlayerIdx  = -1;
+var _playerSearch   = '';
+
+/* ── PIN ── */
+function pk(d) {
+  if (_pinBuf.length >= 4) return;
+  _pinBuf += d; updateDots();
+  if (_pinBuf.length === 4) setTimeout(pkEnter, 80);
+}
+function pkClear() { _pinBuf = ''; updateDots(); document.getElementById('pin-error').textContent = ''; }
+function pkEnter() {
+  var usernameEl = document.getElementById('username-field');
+  var username   = usernameEl ? usernameEl.value.trim() : '';
+  if (!username) {
+    document.getElementById('pin-error').textContent = 'Enter your name first';
+    _pinBuf = ''; updateDots(); return;
+  }
+  if (_pinBuf === FLOOR_PIN) {
+    _operatorName = username;
+    document.getElementById('lock-screen').classList.remove('show');
+    document.getElementById('floor-operator').textContent = 'Floor: ' + username;
+    document.getElementById('app').classList.add('visible');
+    _activeTab = 'dashboard';
+    renderTab();
+    _startAutoRefresh();
+  } else {
+    document.getElementById('pin-error').textContent = 'Incorrect PIN';
+    _pinBuf = ''; updateDots();
+  }
+}
+function updateDots() {
+  for (var i = 0; i < 4; i++) {
+    document.getElementById('d' + i).classList.toggle('filled', i < _pinBuf.length);
+  }
+}
+
+/* ── SPLASH ── */
+function setSplashStatus(msg) {
+  var el = document.getElementById('loading-text');
+  if (el) el.textContent = msg;
+}
+function killSplash() {
+  var sp = document.getElementById('splash');
+  if (!sp) return;
+  sp.classList.add('fade-out');
+  setTimeout(function() {
+    sp.style.display = 'none';
+    var ls = document.getElementById('lock-screen');
+    if (ls) ls.classList.add('show');
+  }, 850);
+}
+
+/* ── SUPABASE INIT ── */
+function initSupabase() {
+  setSplashStatus('Loading SDK\u2026');
+  var s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.0/dist/umd/supabase.min.js';
+  s.onload = function() {
+    try {
+      setSplashStatus('Connecting\u2026');
+      _client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      /* Test connection by fetching one record */
+      _client.from('game_history').select('id').limit(1).then(function(res) {
+        if (res.error) {
+          setSplashStatus('DB error: ' + res.error.message);
+          setTimeout(initSupabase, 5000);
+          return;
+        }
+        _connected = true;
+        setSplashStatus('Connected \u2713');
+        document.getElementById('conn-badge').className = 'ok';
+        document.getElementById('conn-badge').textContent = 'LIVE';
+        _subscribeRealtime();
+        _subscribePresence();
+        setTimeout(killSplash, 800);
+      });
+    } catch(e) {
+      setSplashStatus('Init error: ' + e.message);
+      setTimeout(initSupabase, 5000);
+    }
+  };
+  s.onerror = function() { setSplashStatus('SDK load failed \u2014 retrying\u2026'); setTimeout(initSupabase, 5000); };
+  document.head.appendChild(s);
+}
+
+/* ── REALTIME — live insert feed ── */
+function _subscribeRealtime() {
+  if (_realtimeCh) { try { _client.removeChannel(_realtimeCh); } catch(e) {} }
+  _realtimeCh = _client.channel('floor-history')
+    .on('postgres_changes', {
+      event: 'INSERT', schema: 'public', table: 'game_history'
+    }, function(p) {
+      if (!p.new) return;
+      /* Prepend to live feed (max 20) */
+      _liveFeed.unshift(p.new);
+      if (_liveFeed.length > 20) _liveFeed.length = 20;
+      /* Prepend to history cache if matches selected game */
+      if (p.new.game_id === _selectedGame) {
+        _history.unshift(p.new);
+      }
+      /* Re-render if on dashboard or games tab */
+      if (_activeTab === 'dashboard' || _activeTab === 'games') {
+        try { renderTab(); } catch(e) {}
+      }
+    })
+    .subscribe(function(status) {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        setTimeout(_subscribeRealtime, 3000);
+      }
+    });
+}
+
+/* ── PRESENCE ── */
+function _subscribePresence() {
+  var sessionKey = 'floor_' + Math.random().toString(36).substr(2, 9);
+  _presenceCh = _client.channel('presence-lobby', {
+    config: { presence: { key: sessionKey } }
+  });
+  function _sync() {
+    var state = _presenceCh.presenceState();
+    _presenceState = {};
+    Object.keys(state).forEach(function(k) {
+      var entries = state[k];
+      if (entries && entries.length > 0) _presenceState[k] = entries[0];
+    });
+    if (_activeTab === 'dashboard') { try { renderTab(); } catch(e) {} }
+  }
+  _presenceCh
+    .on('presence', { event: 'sync' }, _sync)
+    .on('presence', { event: 'join' }, _sync)
+    .on('presence', { event: 'leave' }, _sync)
+    .subscribe(function(status) {
+      if (status === 'SUBSCRIBED') {
+        _presenceCh.track({ gameId: 'floor_operator', joinedAt: new Date().toISOString() });
+        setTimeout(_sync, 500);
+      }
+    });
+}
+
+/* ── DATA FETCH ── */
+function fetchHistory(gameId, cb) {
+  if (!_client || !_connected) { if (cb) cb([]); return; }
+  var since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  _client.from('game_history')
+    .select('*')
+    .eq('game_id', gameId)
+    .eq('archived', false)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(500)
+    .then(function(res) {
+      if (res.error) { console.warn('[Floor] fetchHistory error:', res.error.message); if (cb) cb([]); return; }
+      if (cb) cb(res.data || []);
+    });
+}
+
+function fetchAllHistory(cb) {
+  if (!_client || !_connected) { if (cb) cb([]); return; }
+  var since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  _client.from('game_history')
+    .select('*')
+    .eq('archived', false)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(1000)
+    .then(function(res) {
+      if (res.error) { if (cb) cb([]); return; }
+      if (cb) cb(res.data || []);
+    });
+}
+
+function fetchProgressiveHits(cb) {
+  if (!_client || !_connected) { if (cb) cb([]); return; }
+  var since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  _client.from('progressive_hits')
+    .select('*')
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .then(function(res) {
+      if (res.error) { if (cb) cb([]); return; }
+      if (cb) cb(res.data || []);
+    });
+}
+
+/* ── AUTO REFRESH ── */
+function _startAutoRefresh() {
+  if (_autoRefresh) clearInterval(_autoRefresh);
+  if (_autoRefreshMs <= 0) return;
+  _autoRefresh = setInterval(function() {
+    if (_activeTab === 'dashboard') { try { renderTab(); } catch(e) {} }
+  }, _autoRefreshMs);
+}
+
+/* ── HELPERS ── */
+function _fmtMoney(n) {
+  var v = parseFloat(n) || 0;
+  var p = v.toFixed(2).split('.');
+  p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return '$' + p.join('.');
+}
+function _fmtTime(iso) {
+  if (!iso) return '\u2014';
+  try { return new Date(iso).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}); } catch(e) { return iso; }
+}
+function _fmtDateTime(iso) {
+  if (!iso) return '\u2014';
+  try { return new Date(iso).toLocaleString(); } catch(e) { return iso; }
+}
+function _gameName(id) {
+  return (GAMES[id] && GAMES[id].title) || id || '\u2014';
+}
+function _activePlayers() {
+  var count = 0;
+  Object.keys(_presenceState).forEach(function(k) {
+    var p = _presenceState[k];
+    if (!p) return;
+    if (p.gameId === 'operator' || p.gameId === 'wabc_operator' || p.gameId === 'floor_operator') return;
+    count++;
+  });
+  return count;
+}
+function _calcStats(arr) {
+  var spins    = arr.filter(function(r) { return r.event_type === 'SPIN'; });
+  var wagered  = spins.reduce(function(s, r) { return s + (parseFloat(r.bet) || 0); }, 0);
+  var paid     = spins.reduce(function(s, r) { return s + (parseFloat(r.win) || 0); }, 0);
+  var cashIn   = arr.filter(function(r) { return r.event_type === 'CASH_IN'; })
+                    .reduce(function(s, r) { return s + (parseFloat(r.bet) || 0); }, 0);
+  var cashOut  = arr.filter(function(r) { return r.event_type === 'CASH_OUT'; })
+                    .reduce(function(s, r) { return s + (parseFloat(r.win) || 0); }, 0);
+  var rtp      = wagered > 0 ? (paid / wagered * 100) : 0;
+  var jpHits   = arr.filter(function(r) { return r.is_progressive; }).length;
+  var bigWin   = spins.reduce(function(s, r) { return Math.max(s, parseFloat(r.win) || 0); }, 0);
+  /* Pattern frequency */
+  var patCount = {};
+  spins.forEach(function(r) {
+    if (r.patterns && r.patterns.length) {
+      r.patterns.forEach(function(p) { patCount[p] = (patCount[p] || 0) + 1; });
+    }
+  });
+  var topPat = '\u2014';
+  var topCount = 0;
+  Object.keys(patCount).forEach(function(p) { if (patCount[p] > topCount) { topCount = patCount[p]; topPat = p; } });
+  return { spins: spins.length, wagered: wagered, paid: paid, rtp: rtp, cashIn: cashIn,
+           cashOut: cashOut, jpHits: jpHits, bigWin: bigWin, topPat: topPat, topCount: topCount };
+}
+
+/* ── TAB ROUTING ── */
+function showTab(name) {
+  _activeTab = name;
+  _openRecIdx = -1;
+  _openPlayerIdx = -1;
+  var tabs = document.querySelectorAll('.tab');
+  var names = ['dashboard', 'games', 'players', 'settings'];
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', names[i] === name);
+  renderTab();
+}
+
+function renderTab() {
+  var el = document.getElementById('tab-content');
+  if (!el) return;
+  if      (_activeTab === 'dashboard') renderDashboard(el);
+  else if (_activeTab === 'games')     renderGames(el);
+  else if (_activeTab === 'players')   renderPlayers(el);
+  else if (_activeTab === 'settings')  renderSettings(el);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   DASHBOARD TAB
+   ══════════════════════════════════════════════════════════════════════ */
+function renderDashboard(el) {
+  fetchAllHistory(function(all) {
+    var stats = _calcStats(all);
+    var activePl = _activePlayers();
+    var html = '';
+
+    /* Stats grid */
+    html += '<div class="section">';
+    html += '<div class="sec-title">&#128202; Last 24 Hours</div>';
+    html += '<div class="stats-grid">';
+    html += _statCard(activePl, 'Active Players', activePl > 0 ? 'green' : '');
+    html += _statCard(stats.spins, 'Total Spins', '');
+    html += _statCard(_fmtMoney(stats.wagered), 'Total Wagered', '');
+    html += _statCard(_fmtMoney(stats.paid), 'Total Paid', '');
+    html += _statCard(stats.rtp.toFixed(1) + '%', 'Floor RTP', stats.rtp >= 94 ? 'green' : stats.rtp >= 88 ? 'orange' : 'red');
+    html += _statCard(stats.jpHits, 'JP Hits', stats.jpHits > 0 ? 'orange' : '');
+    html += '</div>';
+    html += '</div>';
+
+    /* Per-game quick cards */
+    html += '<div class="section">';
+    html += '<div class="sec-title">&#127918; Games</div>';
+    var gameIds = Object.keys(GAMES);
+    for (var gi = 0; gi < gameIds.length; gi++) {
+      var gid = gameIds[gi];
+      var gname = GAMES[gid].title;
+      var gArr = all.filter(function(r) { return r.game_id === gid; });
+      var gStats = _calcStats(gArr);
+      /* Count active players on this game from presence */
+      var gPlayers = 0;
+      Object.keys(_presenceState).forEach(function(k) {
+        var p = _presenceState[k];
+        if (p && p.gameId === gid) gPlayers++;
+      });
+      html += '<div class="game-card">';
+      html += '<div class="game-card-hdr">';
+      html += '<div class="game-card-name">' + gname + '</div>';
+      html += '<div class="game-card-badge ' + (gPlayers > 0 ? 'live' : 'idle') + '">';
+      html += gPlayers + ' player' + (gPlayers !== 1 ? 's' : '') + '</div>';
+      html += '</div>';
+      html += '<div class="game-stats-row">';
+      html += '<div class="gs-item"><div class="gs-val">' + gStats.spins + '</div><div class="gs-lbl">Spins</div></div>';
+      html += '<div class="gs-item"><div class="gs-val">' + _fmtMoney(gStats.wagered) + '</div><div class="gs-lbl">Wagered</div></div>';
+      html += '<div class="gs-item"><div class="gs-val">' + gStats.rtp.toFixed(1) + '%</div><div class="gs-lbl">RTP</div></div>';
+      html += '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+
+    /* Live feed */
+    html += '<div class="section">';
+    html += '<div class="sec-title">&#9889; Live Feed</div>';
+    if (_liveFeed.length === 0) {
+      html += '<div class="empty-state">No events yet</div>';
+    } else {
+      for (var fi = 0; fi < Math.min(_liveFeed.length, 15); fi++) {
+        var r = _liveFeed[fi];
+        var dotCol = r.is_progressive ? '#ff8800' : r.win > 0 ? '#00ff88' : '#776688';
+        html += '<div class="feed-row">';
+        html += '<div class="feed-dot" style="background:' + dotCol + '"></div>';
+        html += '<div class="feed-text">';
+        html += '<strong>' + (r.nickname || 'Anonymous') + '</strong>';
+        html += ' &bull; ' + _gameName(r.game_id);
+        if (r.event_type === 'SPIN') {
+          if (r.is_progressive) html += ' &bull; <span style="color:#ff8800">&#9733; JACKPOT ' + _fmtMoney(r.win) + '</span>';
+          else if (r.win > 0) html += ' &bull; WIN ' + _fmtMoney(r.win);
+          else html += ' &bull; No bingo';
+        } else if (r.event_type === 'CASH_IN') {
+          html += ' &bull; Cash in ' + _fmtMoney(r.bet);
+        } else if (r.event_type === 'CASH_OUT') {
+          html += ' &bull; Cash out ' + _fmtMoney(r.win);
+        }
+        html += '</div>';
+        html += '<div class="feed-time">' + _fmtTime(r.created_at) + '</div>';
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+
+    el.innerHTML = html;
+  });
+}
+
+function _statCard(val, lbl, cls) {
+  return '<div class="stat-card"><div class="stat-val ' + (cls || '') + '">' + val + '</div><div class="stat-lbl">' + lbl + '</div></div>';
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   GAMES TAB
+   ══════════════════════════════════════════════════════════════════════ */
+function renderGames(el) {
+  var html = '';
+
+  /* Game selector */
+  html += '<div class="game-sel">';
+  var gids = Object.keys(GAMES);
+  for (var gi = 0; gi < gids.length; gi++) {
+    var gid = gids[gi];
+    html += '<button class="game-sel-btn' + (_selectedGame === gid ? ' active' : '') + '" onclick="selectGame(\'' + gid + '\')">';
+    html += GAMES[gid].title.replace('StrayPups Big Munny ', '$');
+    html += '</button>';
+  }
+  html += '</div>';
+
+  el.innerHTML = html + '<div id="game-content"><div class="empty-state">Loading\u2026</div></div>';
+
+  fetchHistory(_selectedGame, function(arr) {
+    _history = arr;
+    _renderGameContent(arr);
+  });
+}
+
+function selectGame(gid) {
+  _selectedGame = gid;
+  _openRecIdx = -1;
+  renderTab();
+}
+
+function _renderGameContent(arr) {
+  var gc = document.getElementById('game-content');
+  if (!gc) return;
+  var stats = _calcStats(arr);
+  var html = '';
+
+  /* Summary */
+  html += '<div class="section">';
+  html += '<div class="sec-title">Summary &mdash; ' + GAMES[_selectedGame].title + '</div>';
+  html += '<div class="stats-grid">';
+  html += _statCard(stats.spins, 'Total Spins', '');
+  html += _statCard(_fmtMoney(stats.wagered), 'Wagered', '');
+  html += _statCard(_fmtMoney(stats.paid), 'Paid Out', '');
+  html += _statCard(stats.rtp.toFixed(1) + '%', 'RTP', stats.rtp >= 94 ? 'green' : stats.rtp >= 88 ? 'orange' : 'red');
+  html += _statCard(_fmtMoney(stats.bigWin), 'Biggest Win', '');
+  html += _statCard(stats.jpHits, 'JP Hits', stats.jpHits > 0 ? 'orange' : '');
+  html += '</div>';
+  if (stats.topPat !== '\u2014') {
+    html += '<div style="font-size:9px;color:var(--dim);margin-top:8px;letter-spacing:1px;">';
+    html += 'TOP PATTERN: <span style="color:var(--gold)">' + stats.topPat + '</span> &times;' + stats.topCount;
+    html += '</div>';
+  }
+  html += '</div>';
+
+  /* Export + Clear */
+  html += '<div style="display:flex;gap:8px;margin-bottom:14px;">';
+  html += '<button class="btn btn-blue" style="flex:1;padding:9px;font-size:10px" onclick="exportHistory()">&#8595; Download .txt</button>';
+  html += '<button class="btn btn-danger" style="flex:1;padding:9px;font-size:10px" onclick="clearHistory()">&#128465; Archive &amp; Clear</button>';
+  html += '</div>';
+
+  /* History records */
+  html += '<div class="section">';
+  html += '<div class="sec-title">History &mdash; Last 24h (' + arr.length + ' records)</div>';
+
+  if (arr.length === 0) {
+    html += '<div class="empty-state">No records for this game in the last 24 hours</div>';
+  } else {
+    for (var i = 0; i < arr.length; i++) {
+      html += _renderRecRow(arr[i], i);
+    }
+  }
+  html += '</div>';
+  gc.innerHTML = html;
+}
+
+function _renderRecRow(r, idx) {
+  var isOpen   = _openRecIdx === idx;
+  var isJP     = r.is_progressive;
+  var isWin    = !isJP && (parseFloat(r.win) || 0) > 0;
+  var isCashIn = r.event_type === 'CASH_IN';
+  var isCashOut= r.event_type === 'CASH_OUT';
+
+  var rowCls = 'rec-row';
+  if (isCashIn)  rowCls += ' cash-in';
+  else if (isCashOut) rowCls += ' cash-out';
+  else if (isJP) rowCls += ' spin jp';
+  else if (isWin) rowCls += ' spin win';
+  else rowCls += ' spin';
+  if (isOpen) rowCls += ' open';
+
+  var typeCls = isJP ? 'rec-type jp' : isWin ? 'rec-type win' : isCashIn ? 'rec-type cash-in' : isCashOut ? 'rec-type cash-out' : 'rec-type';
+  var typeLabel = isJP ? '&#9733; JACKPOT' : r.event_type;
+
+  var patStr = (r.patterns && r.patterns.length) ? r.patterns.join(', ') : 'NO BINGO';
+  var html = '';
+  html += '<div class="' + rowCls + '" onclick="toggleRec(' + idx + ')">';
+  html += '<div class="rec-top">';
+  html += '<span class="' + typeCls + '">' + typeLabel + '</span>';
+  html += '<span class="rec-time">' + _fmtTime(r.created_at) + '</span>';
+  html += '</div>';
+
+  /* Collapsed summary */
+  html += '<div class="rec-detail">';
+  html += '<span>' + (r.nickname || 'Anonymous') + '</span>';
+  if (r.event_type === 'SPIN') {
+    html += ' &bull; Bet: ' + _fmtMoney(r.bet);
+    if (parseFloat(r.win) > 0) html += ' &bull; <span style="color:#00ff88">Win: ' + _fmtMoney(r.win) + '</span>';
+    if (r.patterns && r.patterns.length) html += ' &bull; ' + r.patterns[0] + (r.patterns.length > 1 ? ' +' + (r.patterns.length - 1) + ' more' : '');
+  } else if (isCashIn) {
+    html += ' &bull; +' + _fmtMoney(r.bet);
+  } else if (isCashOut) {
+    html += ' &bull; -' + _fmtMoney(r.win);
+  }
+  html += '</div>';
+
+  /* Expanded detail */
+  html += '<div class="rec-expand">';
+  html += '<span>DATE/TIME:</span> ' + _fmtDateTime(r.created_at) + '<br>';
+  html += '<span>GAME SERIAL:</span> ' + (r.game_serial || '\u2014') + '<br>';
+  html += '<span>CARD SERIAL:</span> ' + (r.card_serial || '\u2014') + '<br>';
+  html += '<span>GAME:</span> ' + _gameName(r.game_id) + '<br>';
+  html += '<span>DENOM:</span> ' + _fmtMoney(r.denom) + '<br>';
+  html += '<span>NICKNAME:</span> ' + (r.nickname || 'Anonymous') + '<br>';
+  html += '<span>BET:</span> ' + _fmtMoney(r.bet) + '<br>';
+  html += '<span>WIN:</span> ' + _fmtMoney(r.win) + '<br>';
+  html += '<span>BALANCE:</span> ' + _fmtMoney(r.bal_before) + ' &rarr; ' + _fmtMoney(r.bal_after) + '<br>';
+  if (r.event_type === 'SPIN') {
+    html += '<span>PATTERNS:</span> ' + patStr + '<br>';
+    html += '<span>BALLS TO WIN:</span> ' + (r.balls_to_win || '\u2014') + '<br>';
+    html += '<span>PROGRESSIVE:</span> ' + (r.is_progressive ? '&#9733; YES &mdash; ' + _fmtMoney(r.prog_amount) : 'No') + '<br>';
+  }
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+function toggleRec(idx) {
+  _openRecIdx = (_openRecIdx === idx) ? -1 : idx;
+  var gc = document.getElementById('game-content');
+  if (!gc) return;
+  /* Re-render just the records section efficiently */
+  var rows = gc.querySelectorAll('.rec-row');
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].classList.toggle('open', i === _openRecIdx);
+  }
+}
+
+/* ── EXPORT ── */
+function exportHistory() {
+  if (!_history || _history.length === 0) { toast('No history to export'); return; }
+  var gname = GAMES[_selectedGame] ? GAMES[_selectedGame].title : _selectedGame;
+  var lines = [];
+  lines.push(gname.toUpperCase() + ' \u2014 GAME HISTORY');
+  lines.push('Generated: ' + new Date().toLocaleString());
+  lines.push('Period: Last 24 Hours');
+  lines.push('Records: ' + _history.length);
+  lines.push('\u2500'.repeat(60));
+  for (var i = 0; i < _history.length; i++) {
+    var r = _history[i];
+    var line = '[' + r.event_type + '] ' + _fmtDateTime(r.created_at);
+    line += ' | Serial: ' + (r.game_serial || '\u2014');
+    line += ' | ' + (r.nickname || 'Anonymous');
+    line += ' | Bet: ' + _fmtMoney(r.bet);
+    line += ' | Win: ' + _fmtMoney(r.win);
+    line += ' | Bal: ' + _fmtMoney(r.bal_before) + '->' + _fmtMoney(r.bal_after);
+    if (r.event_type === 'SPIN') {
+      var pats = (r.patterns && r.patterns.length) ? r.patterns.join(', ') : 'NO BINGO';
+      line += ' | Patterns: ' + pats;
+      if (r.is_progressive) line += ' | *** PROGRESSIVE JACKPOT ' + _fmtMoney(r.prog_amount) + ' ***';
+    }
+    lines.push(line);
+  }
+  lines.push('\u2500'.repeat(60));
+  var stats = _calcStats(_history);
+  lines.push('SUMMARY');
+  lines.push('Total Spins: ' + stats.spins + ' | Wagered: ' + _fmtMoney(stats.wagered) + ' | Paid: ' + _fmtMoney(stats.paid) + ' | RTP: ' + stats.rtp.toFixed(2) + '%');
+  lines.push('Biggest Win: ' + _fmtMoney(stats.bigWin) + ' | JP Hits: ' + stats.jpHits);
+  if (stats.topPat !== '\u2014') lines.push('Top Pattern: ' + stats.topPat + ' x' + stats.topCount);
+
+  var text = lines.join('\n');
+  var fname = gname.replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0,10) + '.txt';
+  try {
+    var blob = new Blob([text], { type: 'text/plain' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url; a.download = fname; a.click();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    toast('Downloaded ' + fname);
+  } catch(e) {
+    /* Fallback: copy to clipboard */
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function() { toast('Copied to clipboard'); });
+    } else { toast('Export failed — try clipboard manually'); }
+  }
+}
+
+/* ── CLEAR HISTORY ── */
+function clearHistory() {
+  if (!_client || !_connected) { toast('Not connected'); return; }
+  if (!confirm('Archive all records for ' + (_gameName(_selectedGame)) + '?\n\nRecords will be marked archived. Records older than 48h will also be hard deleted.')) return;
+  var since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  /* Step 1: archive last 24h records for this game */
+  _client.from('game_history')
+    .update({ archived: true })
+    .eq('game_id', _selectedGame)
+    .eq('archived', false)
+    .gte('created_at', since)
+    .then(function(res) {
+      if (res.error) { toast('Archive failed: ' + res.error.message); return; }
+      /* Step 2: hard delete records older than 48h */
+      var cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      _client.from('game_history')
+        .delete()
+        .eq('game_id', _selectedGame)
+        .lt('created_at', cutoff)
+        .then(function(res2) {
+          if (res2.error) console.warn('[Floor] hard delete error:', res2.error.message);
+          _history = [];
+          toast('History archived for ' + _gameName(_selectedGame));
+          renderTab();
+        });
+    });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PLAYERS TAB
+   ══════════════════════════════════════════════════════════════════════ */
+function renderPlayers(el) {
+  el.innerHTML = '<input id="player-search" type="text" placeholder="&#128269; Search nickname\u2026" ' +
+    'value="' + _playerSearch + '" oninput="onPlayerSearch(this.value)">' +
+    '<div id="players-list"><div class="empty-state">Loading\u2026</div></div>';
+
+  fetchAllHistory(function(all) {
+    _buildPlayersList(all, el);
+  });
+}
+
+function onPlayerSearch(val) {
+  _playerSearch = val;
+  var pl = document.getElementById('players-list');
+  if (!pl) return;
+  /* Re-filter from cached history */
+  fetchAllHistory(function(all) {
+    _buildPlayersList(all, document.getElementById('tab-content'));
+  });
+}
+
+function _buildPlayersList(all, el) {
+  var pl = el ? el.querySelector('#players-list') : document.getElementById('players-list');
+  if (!pl) return;
+
+  /* Group by nickname */
+  var playerMap = {};
+  var now = Date.now();
+  all.forEach(function(r) {
+    var nick = r.nickname || 'Anonymous';
+    if (!playerMap[nick]) {
+      playerMap[nick] = {
+        nickname: nick,
+        games: {},
+        lastSeen: r.created_at,
+        firstSeen: r.created_at,
+        allRecords: []
+      };
+    }
+    var pm = playerMap[nick];
+    pm.allRecords.push(r);
+    if (r.created_at > pm.lastSeen)  pm.lastSeen  = r.created_at;
+    if (r.created_at < pm.firstSeen) pm.firstSeen = r.created_at;
+    if (!pm.games[r.game_id]) pm.games[r.game_id] = [];
+    pm.games[r.game_id].push(r);
+  });
+
+  /* Also add presence players not yet in history */
+  Object.keys(_presenceState).forEach(function(k) {
+    var p = _presenceState[k];
+    if (!p || p.gameId === 'operator' || p.gameId === 'wabc_operator' || p.gameId === 'floor_operator') return;
+    var nick = p.nickname || p.playerLabel || 'Anonymous';
+    if (!playerMap[nick]) {
+      playerMap[nick] = { nickname: nick, games: {}, lastSeen: p.joinedAt, firstSeen: p.joinedAt, allRecords: [] };
+    }
+  });
+
+  /* Sort by lastSeen descending */
+  var players = Object.values ? Object.values(playerMap) : Object.keys(playerMap).map(function(k) { return playerMap[k]; });
+  players.sort(function(a, b) { return (b.lastSeen || '') > (a.lastSeen || '') ? 1 : -1; });
+
+  /* Filter by search */
+  if (_playerSearch) {
+    var q = _playerSearch.toLowerCase();
+    players = players.filter(function(p) { return p.nickname.toLowerCase().indexOf(q) >= 0; });
+  }
+
+  if (players.length === 0) {
+    pl.innerHTML = '<div class="empty-state">No players found</div>';
+    return;
+  }
+
+  /* Check presence for active status */
+  var activeNicks = {};
+  Object.keys(_presenceState).forEach(function(k) {
+    var p = _presenceState[k];
+    if (!p || p.gameId === 'operator' || p.gameId === 'wabc_operator' || p.gameId === 'floor_operator') return;
+    var nick = p.nickname || p.playerLabel || 'Anonymous';
+    activeNicks[nick] = true;
+  });
+
+  var html = '';
+  for (var pi = 0; pi < players.length; pi++) {
+    html += _renderPlayerCard(players[pi], pi, activeNicks);
+  }
+  pl.innerHTML = html;
+}
+
+function _renderPlayerCard(player, idx, activeNicks) {
+  var isOpen   = _openPlayerIdx === idx;
+  var isActive = !!activeNicks[player.nickname];
+  var totalSpins = player.allRecords.filter(function(r) { return r.event_type === 'SPIN'; }).length;
+  var gameList = Object.keys(player.games).map(function(gid) {
+    return _gameName(gid) + ' (' + player.games[gid].filter(function(r){return r.event_type==='SPIN';}).length + ' spins)';
+  }).join(', ');
+
+  var html = '';
+  html += '<div class="player-card' + (isOpen ? ' open' : '') + '" onclick="togglePlayer(' + idx + ')">';
+  html += '<div class="player-card-hdr">';
+  html += '<div>';
+  html += '<div class="player-name">' + (player.nickname === 'Anonymous' ? '&#128373; Anonymous' : '&#128100; ' + player.nickname) + '</div>';
+  html += '<div class="player-meta">Last seen: ' + _fmtTime(player.lastSeen) + '</div>';
+  html += '</div>';
+  html += '<div class="player-dot ' + (isActive ? 'active' : 'idle') + '"></div>';
+  html += '</div>';
+
+  /* Collapsed summary */
+  if (!isOpen) {
+    html += '<div style="font-size:9px;color:var(--dim);margin-top:4px;">' + gameList + '</div>';
+  }
+
+  /* Expanded detail */
+  html += '<div class="player-expand">';
+  html += '<div style="font-size:9px;color:var(--dim);margin-bottom:8px;">';
+  html += 'First seen: ' + _fmtDateTime(player.firstSeen) + ' &bull; Status: ';
+  html += isActive ? '<span style="color:var(--green)">&#9679; Active</span>' : '<span style="color:var(--orange)">&#9679; Idle</span>';
+  html += '</div>';
+
+  /* Per-game breakdown */
+  Object.keys(player.games).forEach(function(gid) {
+    var grecs = player.games[gid];
+    var gstats = _calcStats(grecs);
+    var cashIn  = grecs.filter(function(r){return r.event_type==='CASH_IN';})
+                       .reduce(function(s,r){return s+(parseFloat(r.bet)||0);},0);
+    var cashOut = grecs.filter(function(r){return r.event_type==='CASH_OUT';})
+                       .reduce(function(s,r){return s+(parseFloat(r.win)||0);},0);
+
+    /* Top patterns */
+    var patCount = {};
+    grecs.forEach(function(r) {
+      if (r.patterns) r.patterns.forEach(function(p) { patCount[p] = (patCount[p]||0)+1; });
+    });
+    var topPats = Object.keys(patCount).sort(function(a,b){return patCount[b]-patCount[a];}).slice(0,5);
+
+    html += '<div class="player-game-section">';
+    html += '<div class="player-game-title">&#127918; ' + _gameName(gid) + '</div>';
+    html += '<div class="player-stat-grid">';
+    html += '<div class="player-stat">Spins: <span>' + gstats.spins + '</span></div>';
+    html += '<div class="player-stat">Wagered: <span>' + _fmtMoney(gstats.wagered) + '</span></div>';
+    html += '<div class="player-stat">Won: <span>' + _fmtMoney(gstats.paid) + '</span></div>';
+    html += '<div class="player-stat">RTP: <span>' + gstats.rtp.toFixed(1) + '%</span></div>';
+    html += '<div class="player-stat">Biggest Win: <span>' + _fmtMoney(gstats.bigWin) + '</span></div>';
+    html += '<div class="player-stat">Cash In: <span>' + _fmtMoney(cashIn) + '</span></div>';
+    html += '<div class="player-stat">Cash Out: <span>' + _fmtMoney(cashOut) + '</span></div>';
+    html += '<div class="player-stat">JP Hits: <span>' + gstats.jpHits + '</span></div>';
+    html += '</div>';
+    if (topPats.length > 0) {
+      html += '<div style="margin-top:6px;font-size:8px;color:var(--dim);letter-spacing:1px;">TOP PATTERNS</div>';
+      html += '<div class="pattern-tags">';
+      topPats.forEach(function(p) {
+        html += '<div class="ptag">' + p + ' &times;' + patCount[p] + '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+
+  html += '</div>'; /* player-expand */
+  html += '</div>'; /* player-card */
+  return html;
+}
+
+function togglePlayer(idx) {
+  _openPlayerIdx = (_openPlayerIdx === idx) ? -1 : idx;
+  /* Re-render just the cards toggle */
+  var cards = document.querySelectorAll('.player-card');
+  for (var i = 0; i < cards.length; i++) {
+    cards[i].classList.toggle('open', i === _openPlayerIdx);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   SETTINGS TAB
+   ══════════════════════════════════════════════════════════════════════ */
+function renderSettings(el) {
+  var refreshOpts = [
+    { ms: 15000,  label: '15 seconds' },
+    { ms: 30000,  label: '30 seconds' },
+    { ms: 60000,  label: '1 minute' },
+    { ms: 0,      label: 'Off' }
+  ];
+  var html = '';
+
+  /* Auto-refresh */
+  html += '<div class="section">';
+  html += '<div class="sec-title">&#8635; Auto-Refresh</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">';
+  refreshOpts.forEach(function(opt) {
+    var active = _autoRefreshMs === opt.ms;
+    html += '<button class="btn ' + (active ? 'btn-gold' : '') + '" style="padding:7px 12px;font-size:10px;'
+      + (active ? '' : 'background:var(--bg2);border:1px solid var(--border);color:var(--dim);')
+      + '" onclick="setRefresh(' + opt.ms + ')">' + opt.label + '</button>';
+  });
+  html += '</div>';
+  html += '</div>';
+
+  /* Realtime */
+  html += '<div class="section">';
+  html += '<div class="sec-title">&#9889; Connection</div>';
+  html += '<div style="font-size:11px;color:var(--text);padding:6px 0;">';
+  html += 'Supabase Realtime: <span style="color:' + (_connected ? 'var(--green)' : 'var(--danger)') + '">' + (_connected ? 'LIVE' : 'OFFLINE') + '</span><br>';
+  html += '<span style="font-size:9px;color:var(--dim)">Project: gdmmoeggkqsvqnqyrubx &bull; Table: game_history</span>';
+  html += '</div>';
+  html += '</div>';
+
+  /* Danger zone */
+  html += '<div class="section">';
+  html += '<div class="sec-title" style="color:#ff4444;">&#9888; Danger Zone</div>';
+  html += '<button class="btn btn-danger btn-full" onclick="archiveAll()">Archive All Records (All Games)</button>';
+  html += '<button class="btn btn-danger btn-full" style="margin-top:8px" onclick="hardDeleteArchived()">Hard Delete All Archived Records</button>';
+  html += '</div>';
+
+  /* About */
+  html += '<div class="section">';
+  html += '<div class="sec-title">&#8505; About</div>';
+  html += '<div style="font-size:10px;color:var(--dim);line-height:1.9;">';
+  html += 'Floor Manager v1.0<br>';
+  html += 'Gold Coins Casino &bull; Stray-Pup LLC<br>';
+  html += 'Games: StrayPups $1 &bull; StrayPups $5<br>';
+  html += 'History: 24-hour rolling window<br>';
+  html += 'Operator: ' + _operatorName;
+  html += '</div>';
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+function setRefresh(ms) {
+  _autoRefreshMs = ms;
+  _startAutoRefresh();
+  toast('Auto-refresh: ' + (ms > 0 ? (ms / 1000) + 's' : 'off'));
+  renderTab();
+}
+
+function archiveAll() {
+  if (!_client || !_connected) { toast('Not connected'); return; }
+  if (!confirm('Archive ALL records across ALL games?\n\nThis marks everything as archived.')) return;
+  _client.from('game_history').update({ archived: true }).eq('archived', false)
+    .then(function(res) {
+      if (res.error) { toast('Failed: ' + res.error.message); return; }
+      toast('All records archived');
+    });
+}
+
+function hardDeleteArchived() {
+  if (!_client || !_connected) { toast('Not connected'); return; }
+  if (!confirm('PERMANENTLY DELETE all archived records?\n\nThis cannot be undone.')) return;
+  _client.from('game_history').delete().eq('archived', true)
+    .then(function(res) {
+      if (res.error) { toast('Failed: ' + res.error.message); return; }
+      toast('Archived records permanently deleted');
+    });
+}
+
+/* ── TOAST ── */
+var _toastTimer = null;
+function toast(msg) {
+  var el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(function() { el.classList.remove('on'); }, 2500);
+}
+
+/* ── SERVICE WORKER ── */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('service-worker.js').catch(function(e) { console.warn(e); });
+  });
+}
+
+/* ── INIT ── */
+initSupabase();
+setTimeout(function() {
+  if (document.getElementById('splash').style.display !== 'none') killSplash();
+}, 10000);
+</script>
+</body>
+</html>
