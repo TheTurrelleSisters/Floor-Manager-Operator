@@ -51,3 +51,25 @@ Casino floor management PWA. PIN-protected. Reads game_history table via Supabas
 - ES5 only
 - All logic inline in index.html
 - Cache bust on every single build
+
+### v1.2 — Splash Error + Retry + DOM Removal
+- killSplash fixed to remove splash from DOM entirely
+- splashError() added — red error + RETRY button on any connection failure
+- All setTimeout retry loops replaced with splashError()
+- SDK cleanup added before each retry
+- Cache bust: floor-v1.2
+
+### v1.3 — SDK Cleanup Improvement
+- window.supabase cleared before each retry
+- window._sbScriptEl tracks script for proper cleanup on retry
+- Cache bust: floor-v1.3
+
+---
+
+## Current Version: v1.3 (cache: floor-v1.3)
+
+## Pending
+- [ ] First live test with games writing to game_history
+- [ ] Player tab verified with real nicknames
+- [ ] Export .txt download tested on mobile
+- [ ] Neon.tech migration — Realtime replacement needed
