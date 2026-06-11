@@ -260,7 +260,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
     <div id="loading-track"><div id="loading-bar"></div></div>
     <div id="loading-text">Connecting&hellip;</div>
   </div>
-  <div id="splash-ver">v1.2</div>
+  <div id="splash-ver">v1.3</div>
 </div>
 
 <!-- ══ LOCK SCREEN ══ -->
@@ -427,7 +427,12 @@ function killSplash() {
 /* ── SUPABASE INIT ── */
 function initSupabase() {
   setSplashStatus('Loading SDK\u2026');
+  if (window._sbScriptEl && window._sbScriptEl.parentNode) {
+    window._sbScriptEl.parentNode.removeChild(window._sbScriptEl);
+  }
+  window.supabase = undefined;
   var s = document.createElement('script');
+  window._sbScriptEl = s;
   s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.0/dist/umd/supabase.min.js';
   s.onload = function() {
     try {
@@ -1169,7 +1174,7 @@ function renderSettings(el) {
   html += '<div class="section">';
   html += '<div class="sec-title">&#8505; About</div>';
   html += '<div style="font-size:10px;color:var(--dim);line-height:1.9;">';
-  html += 'Floor Manager v1.2<br>';
+  html += 'Floor Manager v1.3<br>';
   html += 'Gold Coins Casino &bull; Stray-Pup LLC<br>';
   html += 'Games: StrayPups $1 &bull; StrayPups $5<br>';
   html += 'History: 24-hour rolling window<br>';
