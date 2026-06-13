@@ -260,7 +260,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
     <div id="loading-track"><div id="loading-bar"></div></div>
     <div id="loading-text">Connecting&hellip;</div>
   </div>
-  <div id="splash-ver">v1.4</div>
+  <div id="splash-ver">v1.5</div>
 </div>
 
 <!-- ══ LOCK SCREEN ══ -->
@@ -437,7 +437,15 @@ function initSupabase() {
   s.onload = function() {
     try {
       setSplashStatus('Connecting\u2026');
-      _client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      _client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: { persistSession: false, detectSessionInUrl: false,
+            storage: {
+              getItem: function(key){ return null; },
+              setItem: function(key,value){},
+              removeItem: function(key){}
+            }
+          }
+        });
       /* Test connection by fetching one record */
       _client.from('game_history').select('id').limit(1).then(function(res) {
         if (res.error) {

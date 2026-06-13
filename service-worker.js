@@ -4,7 +4,7 @@
  * AUTO-UPDATE: Detects new version, clears old cache, reloads all clients silently.
  * Bump CACHE_VER on every release — everything else is automatic.
  */
-var CACHE_VER = 'floor-v1.4';
+var CACHE_VER = 'floor-v1.5';
 
 var CACHE_URLS = ['./index.html','./manifest.json','./icons/icon-192x192.png','./icons/icon-512x512.png'];
 
@@ -45,24 +45,47 @@ self.addEventListener('activate', function(e) {
 });
 
 self.addEventListener('fetch', function(e) {
+  /* Never intercept non-GET requests (POST/PATCH/PUT/DELETE) — these are
+     Supabase mutations (RPC calls, inserts, updates). cache.put() only
+     supports GET and throws on anything else. */
+  if (e.request.method !== 'GET') return;
+
   var url = e.request.url;
-  if (url.indexOf('.js') !== -1 || url.indexOf('.html') !== -1 ||
-      url.indexOf('supabase.co') !== -1 || url.indexOf('jsdelivr.net') !== -1 ||
-      url.indexOf('cdn.') !== -1) {
+
+  /* NEVER cache Supabase API responses — table reads (.select()) must
+     always hit the network so the UI reflects current DB state. Caching
+     these could serve stale data forever on repeat identical queries. */
+  if (url.indexOf('supabase.co') !== -1) return;
+
+  /* Network-first for JS/HTML/CDN assets */
+  if (url.indexOf('.js')          !== -1 ||
+      url.indexOf('.html')        !== -1 ||
+      url.indexOf('jsdelivr.net') !== -1 ||
+      url.indexOf('cdn.')         !== -1) {
     e.respondWith(
-      fetch(e.request).then(function(resp) {
-        var clone = resp.clone();
-        caches.open(CACHE_VER).then(function(cache) { cache.put(e.request, clone); });
-        return resp;
-      }).catch(function() { return caches.match(e.request); })
+      fetch(e.request)
+        .then(function(resp) {
+          /* 206 Partial Content (audio/video range requests) cannot be
+             cached — skip cache.put for those. */
+          if (resp && resp.status !== 206) {
+            var clone = resp.clone();
+            caches.open(CACHE_VER).then(function(cache) { cache.put(e.request, clone); });
+          }
+          return resp;
+        })
+        .catch(function() { return caches.match(e.request); })
     );
     return;
   }
+
+  /* Cache-first for icons / static assets (images, audio, video) */
   e.respondWith(
     caches.match(e.request).then(function(cached) {
       return cached || fetch(e.request).then(function(resp) {
-        var clone = resp.clone();
-        caches.open(CACHE_VER).then(function(cache) { cache.put(e.request, clone); });
+        if (resp && resp.status !== 206) {
+          var clone = resp.clone();
+          caches.open(CACHE_VER).then(function(cache) { cache.put(e.request, clone); });
+        }
         return resp;
       });
     })
