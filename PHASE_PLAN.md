@@ -105,3 +105,8 @@ KNOWN OPEN ISSUE (not yet investigated): both StrayPups games appear to be
 broadcasting DIFFERENT ball-call sequences again (regression) — possible
 WABC/local-vs-wide-area switching issue. To be investigated next session.
 
+
+### v1.6 — Presence Retry Fix
+Same one-shot-subscribe presence bug as games/Progressive Operator — fixed
+with exponential backoff retry (2s->30s cap).
+Cache bust: floor-v1.6

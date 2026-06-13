@@ -260,7 +260,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
     <div id="loading-track"><div id="loading-bar"></div></div>
     <div id="loading-text">Connecting&hellip;</div>
   </div>
-  <div id="splash-ver">v1.5</div>
+  <div id="splash-ver">v1.6</div>
 </div>
 
 <!-- ══ LOCK SCREEN ══ -->
@@ -496,8 +496,12 @@ function _subscribeRealtime() {
 }
 
 /* ── PRESENCE ── */
+var _floorPresenceRetryDelay = 2000;
 function _subscribePresence() {
   var sessionKey = 'floor_' + Math.random().toString(36).substr(2, 9);
+  _doSubscribePresence(sessionKey);
+}
+function _doSubscribePresence(sessionKey) {
   _presenceCh = _client.channel('presence-lobby', {
     config: { presence: { key: sessionKey } }
   });
@@ -516,8 +520,24 @@ function _subscribePresence() {
     .on('presence', { event: 'leave' }, _sync)
     .subscribe(function(status) {
       if (status === 'SUBSCRIBED') {
+        _floorPresenceRetryDelay = 2000;
         _presenceCh.track({ gameId: 'floor_operator', joinedAt: new Date().toISOString() });
         setTimeout(_sync, 500);
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        console.warn('[Floor] presence channel ' + status + ' — reconnecting in ' + (_floorPresenceRetryDelay/1000) + 's');
+        var _old = _presenceCh;
+        var _delay = _floorPresenceRetryDelay;
+        _floorPresenceRetryDelay = Math.min(_floorPresenceRetryDelay * 2, 30000);
+        setTimeout(function() {
+          try {
+            var _rm = _client.removeChannel(_old);
+            if (_rm && typeof _rm.then === 'function') {
+              _rm.then(function(){ _doSubscribePresence(sessionKey); }).catch(function(){ _doSubscribePresence(sessionKey); });
+            } else {
+              _doSubscribePresence(sessionKey);
+            }
+          } catch(e) { _doSubscribePresence(sessionKey); }
+        }, _delay);
       }
     });
 }
