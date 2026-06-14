@@ -110,3 +110,11 @@ WABC/local-vs-wide-area switching issue. To be investigated next session.
 Same one-shot-subscribe presence bug as games/Progressive Operator — fixed
 with exponential backoff retry (2s->30s cap).
 Cache bust: floor-v1.6
+
+### v1.7 — Presence Heartbeat (zombie-channel fix)
+Same hypothesis as the games: a zombie presence channel
+(silent socket reconnect with no CHANNEL_ERROR/CLOSED) could leave this
+tool unable to see other presences with no visible error. Added a 60s
+heartbeat: fully removeChannel + recreate the presence channel on a fixed
+interval.
+Cache bust: floor-v1.7

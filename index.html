@@ -260,7 +260,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
     <div id="loading-track"><div id="loading-bar"></div></div>
     <div id="loading-text">Connecting&hellip;</div>
   </div>
-  <div id="splash-ver">v1.6</div>
+  <div id="splash-ver">v1.7</div>
 </div>
 
 <!-- ══ LOCK SCREEN ══ -->
@@ -500,6 +500,24 @@ var _floorPresenceRetryDelay = 2000;
 function _subscribePresence() {
   var sessionKey = 'floor_' + Math.random().toString(36).substr(2, 9);
   _doSubscribePresence(sessionKey);
+
+  /* PRESENCE HEARTBEAT (every 60s): full teardown+recreate of the
+     presence channel. Guards against a "zombie" channel — a silent
+     socket reconnect (Supabase free-tier Realtime tenant cold-start)
+     can leave this channel joined locally but dead server-side, with
+     no CHANNEL_ERROR ever firing. */
+  setInterval(function () {
+    if (!_client) return;
+    var _old = _presenceCh;
+    try {
+      var _rm = _client.removeChannel(_old);
+      if (_rm && typeof _rm.then === 'function') {
+        _rm.then(function(){ _doSubscribePresence(sessionKey); }).catch(function(){ _doSubscribePresence(sessionKey); });
+      } else {
+        _doSubscribePresence(sessionKey);
+      }
+    } catch (e) { _doSubscribePresence(sessionKey); }
+  }, 60000);
 }
 function _doSubscribePresence(sessionKey) {
   _presenceCh = _client.channel('presence-lobby', {
