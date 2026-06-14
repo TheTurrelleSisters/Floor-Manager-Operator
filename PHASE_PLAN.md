@@ -136,3 +136,22 @@ every 5s. Requires the NEW touch_player_last_seen SQL RPC (see games
 PHASE_PLAN v5.84) and game build v5.84+ to keep last_seen fresh for
 nickname-less players too.
 Cache bust: floor-v1.9
+
+
+### v1.10 — Friendly game-name update + TSBIGMUNNY now visible
+- GAMES map: 'StrayPups Big Munny $1'/'$5' -> 'Stray Pups Big Munny
+  $1'/'$5'; NEW entry 'turrelle': 'The Turrelle Sisters Big Munny'
+  (color #aa66ff). Companion rename in both bingo games (v5.87),
+  progressive_operator (v3.21), and tsbigmunny (v8.2.2).
+- tsbigmunny (game_id 'turrelle') previously called register_player but
+  NEVER updated player_registry.last_seen (no touch_player_last_seen) and
+  registerPlayer was never even called from its game.js -- so it never
+  appeared in player_registry at all. Fixed in tsbigmunny v8.2.2 (see
+  tsbigmunny/PHASE_PLAN.md); fetchPlayerRegistry()/_connectedPlayers()
+  here are unfiltered by game_id, so tsbigmunny players are now correctly
+  included in Connected/Inactive counts with no changes needed on this
+  side beyond the GAMES map entry above (for per-game name display).
+- Fixed stale "About" section: version string was hardcoded at v1.4
+  (several releases behind), and the games list was missing $5 naming
+  update + TSBIGMUNNY entirely. Now reads v1.10 and lists all 3 games.
+- Cache bust: floor-v1.10.

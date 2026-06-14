@@ -260,7 +260,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
     <div id="loading-track"><div id="loading-bar"></div></div>
     <div id="loading-text">Connecting&hellip;</div>
   </div>
-  <div id="splash-ver">v1.9</div>
+  <div id="splash-ver">v1.10</div>
 </div>
 
 <!-- ══ LOCK SCREEN ══ -->
@@ -327,8 +327,9 @@ var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 var FLOOR_PIN         = '7777'; /* Change to your preferred PIN */
 
 var GAMES = {
-  'straypups_1d': { title: 'StrayPups Big Munny $1', denom: 1.00,  color: '#ffd700' },
-  'straypups_5d': { title: 'StrayPups Big Munny $5', denom: 5.00,  color: '#ff8800' }
+  'straypups_1d': { title: 'Stray Pups Big Munny $1', denom: 1.00,  color: '#ffd700' },
+  'straypups_5d': { title: 'Stray Pups Big Munny $5', denom: 5.00,  color: '#ff8800' },
+  'turrelle':     { title: 'The Turrelle Sisters Big Munny', denom: 1.00, color: '#aa66ff' }
 };
 
 /* ── State ── */
@@ -1221,9 +1222,9 @@ function renderSettings(el) {
   html += '<div class="section">';
   html += '<div class="sec-title">&#8505; About</div>';
   html += '<div style="font-size:10px;color:var(--dim);line-height:1.9;">';
-  html += 'Floor Manager v1.4<br>';
+  html += 'Floor Manager v1.10<br>';
   html += 'Gold Coins Casino &bull; Stray-Pup LLC<br>';
-  html += 'Games: StrayPups $1 &bull; StrayPups $5<br>';
+  html += 'Games: Stray Pups Big Munny $1 &bull; Stray Pups Big Munny $5 &bull; The Turrelle Sisters Big Munny<br>';
   html += 'History: 24-hour rolling window<br>';
   html += 'Operator: ' + _operatorName;
   html += '</div>';
