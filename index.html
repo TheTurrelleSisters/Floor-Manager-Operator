@@ -260,7 +260,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
     <div id="loading-track"><div id="loading-bar"></div></div>
     <div id="loading-text">Connecting&hellip;</div>
   </div>
-  <div id="splash-ver">v1.10</div>
+  <div id="splash-ver">v1.9</div>
 </div>
 
 <!-- ══ LOCK SCREEN ══ -->
@@ -317,7 +317,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════
-   FLOOR MANAGER v1.10
+   FLOOR MANAGER v1.1
    Stray-Pup LLC / The Turrelle Sisters LLC
    Gold Coins Casino
    ══════════════════════════════════════════════════════════════════════ */
@@ -340,6 +340,9 @@ var _activeTab      = 'dashboard';
 var _selectedGame   = 'straypups_1d';
 var _history        = [];        /* cached game_history records */
 var _presenceState  = {};
+var _playerRegistry = [];  /* rows from player_registry table — durable, DB-backed */
+var PLAYER_ACTIVE_MS = 60 * 1000;   /* last_seen within this = active/spinning */
+var PLAYER_STALE_MS  = 180 * 1000;  /* last_seen older than this = drop entirely */
 var _liveFeed       = [];        /* last 20 events for dashboard feed */
 var _autoRefresh    = null;
 var _autoRefreshMs  = 30000;
@@ -458,6 +461,7 @@ function initSupabase() {
         document.getElementById('conn-badge').textContent = 'LIVE';
         _subscribeRealtime();
         _subscribePresence();
+        startPlayerRegistryPolling();
         setTimeout(killSplash, 800);
       });
     } catch(e) {
@@ -497,6 +501,35 @@ function _subscribeRealtime() {
 
 /* ── PRESENCE ── */
 var _floorPresenceRetryDelay = 2000;
+/* ══════════════════════════════════════════════════════════════════════
+   PLAYER REGISTRY — durable, DB-backed "connected players" source.
+   Replaces presence-lobby for player counts/lists. Polled every 5s;
+   last_seen is touched by the game on every spin (touch_player_last_seen
+   RPC), regardless of nickname.
+   ══════════════════════════════════════════════════════════════════════ */
+function fetchPlayerRegistry() {
+  if (!_client) return;
+  _client.from('player_registry').select('*').then(function(res) {
+    if (res.error) { console.warn('[Floor] player_registry fetch error:', res.error.message); return; }
+    _playerRegistry = res.data || [];
+    if (_activeTab === 'dashboard' || _activeTab === 'games' || _activeTab === 'players') renderTab();
+  });
+}
+
+function startPlayerRegistryPolling() {
+  fetchPlayerRegistry();
+  setInterval(fetchPlayerRegistry, 5000);
+}
+
+/* Rows still considered "connected" (last_seen within PLAYER_STALE_MS) */
+function _connectedPlayers() {
+  var now = Date.now();
+  return _playerRegistry.filter(function(p) {
+    if (!p.last_seen) return false;
+    return (now - new Date(p.last_seen).getTime()) < PLAYER_STALE_MS;
+  });
+}
+
 function _subscribePresence() {
   var sessionKey = 'floor_' + Math.random().toString(36).substr(2, 9);
   _doSubscribePresence(sessionKey);
@@ -522,11 +555,7 @@ function _doSubscribePresence(sessionKey) {
       if (status === 'SUBSCRIBED') {
         _floorPresenceRetryDelay = 2000;
         _presenceCh.track({ gameId: 'floor_operator', joinedAt: new Date().toISOString() });
-        /* Call _sync (not just renderTab) so _presenceState is populated from
-           the live channel state immediately. Two passes cover free-tier cold-start
-           where channel hydration can be delayed up to ~2 seconds. */
         setTimeout(_sync, 500);
-        setTimeout(_sync, 2000);
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         console.warn('[Floor] presence channel ' + status + ' — reconnecting in ' + (_floorPresenceRetryDelay/1000) + 's');
         var _old = _presenceCh;
@@ -596,9 +625,6 @@ function _startAutoRefresh() {
   if (_autoRefresh) clearInterval(_autoRefresh);
   if (_autoRefreshMs <= 0) return;
   _autoRefresh = setInterval(function() {
-    /* Re-sync presence from live channel state before re-rendering,
-       so _presenceState is never stale between presence events. */
-    if (_presenceCh) { try { var s=_presenceCh.presenceState(); _presenceState={}; Object.keys(s).forEach(function(k){var e=s[k];if(e&&e.length>0)_presenceState[k]=e[0];}); } catch(e) {} }
     if (_activeTab === 'dashboard') { try { renderTab(); } catch(e) {} }
   }, _autoRefreshMs);
 }
@@ -622,14 +648,7 @@ function _gameName(id) {
   return (GAMES[id] && GAMES[id].title) || id || '\u2014';
 }
 function _activePlayers() {
-  var count = 0;
-  Object.keys(_presenceState).forEach(function(k) {
-    var p = _presenceState[k];
-    if (!p) return;
-    if (p.gameId === 'operator' || p.gameId === 'wabc_operator' || p.gameId === 'floor_operator') return;
-    count++;
-  });
-  return count;
+  return _connectedPlayers().length;
 }
 function _calcStats(arr) {
   var spins    = arr.filter(function(r) { return r.event_type === 'SPIN'; });
@@ -707,13 +726,8 @@ function renderDashboard(el) {
       var gname = GAMES[gid].title;
       var gArr = all.filter(function(r) { return r.game_id === gid; });
       var gStats = _calcStats(gArr);
-      /* Count active players on this game from presence */
-      var gPlayers = 0;
-      Object.keys(_presenceState).forEach(function(k) {
-        var p = _presenceState[k];
-        if (!p || p.gameId === 'operator' || p.gameId === 'wabc_operator' || p.gameId === 'floor_operator') return;
-        if (p.gameId === gid) gPlayers++;
-      });
+      /* Count connected players on this game from player_registry */
+      var gPlayers = _connectedPlayers().filter(function(p) { return p.game_id === gid; }).length;
       html += '<div class="game-card">';
       html += '<div class="game-card-hdr">';
       html += '<div class="game-card-name">' + gname + '</div>';
@@ -1007,13 +1021,11 @@ function renderPlayers(el) {
 
 function onPlayerSearch(val) {
   _playerSearch = val;
-  /* Filter from the already-loaded tab content — no re-fetch needed */
-  var el = document.getElementById('tab-content');
-  if (!el) return;
   var pl = document.getElementById('players-list');
   if (!pl) return;
+  /* Re-filter from cached history */
   fetchAllHistory(function(all) {
-    _buildPlayersList(all, el);
+    _buildPlayersList(all, document.getElementById('tab-content'));
   });
 }
 
@@ -1043,13 +1055,12 @@ function _buildPlayersList(all, el) {
     pm.games[r.game_id].push(r);
   });
 
-  /* Also add presence players not yet in history */
-  Object.keys(_presenceState).forEach(function(k) {
-    var p = _presenceState[k];
-    if (!p || p.gameId === 'operator' || p.gameId === 'wabc_operator' || p.gameId === 'floor_operator') return;
-    var nick = p.nickname || p.playerLabel || 'Anonymous';
+  /* Also add player_registry players not yet in history (e.g. registered
+     but haven't completed a spin yet, so no game_history rows exist) */
+  _playerRegistry.forEach(function(p) {
+    var nick = p.nickname || ('Player ' + p.player_num);
     if (!playerMap[nick]) {
-      playerMap[nick] = { nickname: nick, games: {}, lastSeen: p.joinedAt, firstSeen: p.joinedAt, allRecords: [] };
+      playerMap[nick] = { nickname: nick, games: {}, lastSeen: p.last_seen || p.first_seen, firstSeen: p.first_seen, allRecords: [] };
     }
   });
 
@@ -1068,12 +1079,10 @@ function _buildPlayersList(all, el) {
     return;
   }
 
-  /* Check presence for active status */
+  /* Check player_registry for active status */
   var activeNicks = {};
-  Object.keys(_presenceState).forEach(function(k) {
-    var p = _presenceState[k];
-    if (!p || p.gameId === 'operator' || p.gameId === 'wabc_operator' || p.gameId === 'floor_operator') return;
-    var nick = p.nickname || p.playerLabel || 'Anonymous';
+  _connectedPlayers().forEach(function(p) {
+    var nick = p.nickname || ('Player ' + p.player_num);
     activeNicks[nick] = true;
   });
 
@@ -1212,7 +1221,7 @@ function renderSettings(el) {
   html += '<div class="section">';
   html += '<div class="sec-title">&#8505; About</div>';
   html += '<div style="font-size:10px;color:var(--dim);line-height:1.9;">';
-  html += 'Floor Manager v1.10<br>';
+  html += 'Floor Manager v1.4<br>';
   html += 'Gold Coins Casino &bull; Stray-Pup LLC<br>';
   html += 'Games: StrayPups $1 &bull; StrayPups $5<br>';
   html += 'History: 24-hour rolling window<br>';
@@ -1236,9 +1245,7 @@ function archiveAll() {
   _client.from('game_history').update({ archived: true }).eq('archived', false)
     .then(function(res) {
       if (res.error) { toast('Failed: ' + res.error.message); return; }
-      _history = [];
       toast('All records archived');
-      renderTab();
     });
 }
 
@@ -1248,9 +1255,7 @@ function hardDeleteArchived() {
   _client.from('game_history').delete().eq('archived', true)
     .then(function(res) {
       if (res.error) { toast('Failed: ' + res.error.message); return; }
-      _history = [];
       toast('Archived records permanently deleted');
-      renderTab();
     });
 }
 
