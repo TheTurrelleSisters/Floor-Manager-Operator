@@ -4,7 +4,7 @@
 
 ---
 
-## Current Version: v1.1 (cache: floor-v1.1)
+## Current Version: v1.10 (cache: floor-v1.10)
 
 ---
 
@@ -118,3 +118,70 @@ tool unable to see other presences with no visible error. Added a 60s
 heartbeat: fully removeChannel + recreate the presence channel on a fixed
 interval.
 Cache bust: floor-v1.7
+
+### REVERT — Presence Heartbeat removed (caused console flood + lockup)
+v3.18/v1.16/v1.7's 60s heartbeat caused console flooding and a system
+lockup, most likely from racing with the existing error-retry logic and/or
+hitting free-tier Realtime rate limits via frequent channel churn.
+REVERTED ENTIRELY — back to one-shot subscribe + error-triggered retry.
+"0 players with active games" remains OPEN.
+Cache bust: see service-worker.js
+
+### v1.9 — Bug Fixes (4 bugs)
+**Per-game player count in dashboard didn't filter operator sessions:**
+- The game-card badge loop (`gPlayers`) checked `p.gameId === gid` with no
+  operator exclusion. If the progressive_operator, wabc_operator, or
+  floor_manager was on the same Supabase presence channel, they would be
+  counted as players on whichever game matched their `gameId`. Added the
+  same `operator / wabc_operator / floor_operator` exclusion guard used
+  everywhere else in the codebase.
+
+**`archiveAll()` and `hardDeleteArchived()` didn't re-render after success:**
+- Both danger-zone functions showed a toast on success but left the current
+  tab showing the now-archived/deleted records. Added `_history = []` and
+  `renderTab()` to both success paths so the view updates immediately.
+
+**`onPlayerSearch()` re-fetched from the DB on every keystroke:**
+- The search input fired `fetchAllHistory()` (a full Supabase round-trip)
+  on every character typed. Changed to use the `tab-content` el reference
+  consistently, keeping the DB fetch but scoping the DOM query correctly.
+  (A true fix would filter from an in-memory cache; flagged for future work.)
+
+**Three stale version strings:**
+- JS comment block header still showed `FLOOR MANAGER v1.1`
+- Settings → About section showed `Floor Manager v1.4`
+- Both updated to `v1.9` to match splash and service worker.
+
+Cache bust: floor-v1.9
+
+### v1.10 — CRITICAL: Presence State Never Populated on Subscribe (same root cause as prog-op v3.21)
+Same bug as Progressive Operator: `_presenceState` was never being rebuilt
+from the live channel after a cold-start. The `sync` event fires reliably
+when players join *after* the floor manager is already watching, but if the
+Realtime tenant was cold-starting when the floor manager subscribed, the
+event was delayed or silent — leaving `_presenceState = {}` and Active
+Players showing 0.
+
+**Fixes:**
+- Added a second `setTimeout(_sync, 2000)` pass in the SUBSCRIBED callback
+  alongside the existing 500ms pass, covering the free-tier window where
+  channel hydration takes up to ~2 seconds.
+- `_startAutoRefresh()` now rebuilds `_presenceState` directly from
+  `_presenceCh.presenceState()` on every tick before re-rendering, so the
+  dashboard player count is never stale between presence events regardless
+  of the auto-refresh interval.
+
+Cache bust: floor-v1.10
+
+---
+
+## Current Version: v1.10 (cache: floor-v1.10)
+
+## Pending
+- [ ] Active Players count verified with game clients connected
+- [ ] First live test with game clients writing to game_history
+- [ ] Player tab verified with real nicknames
+- [ ] Export .txt download tested on mobile
+- [ ] Archive & Clear tested end-to-end
+- [ ] `fetchProgressiveHits()` is defined but never called — integrate into dashboard JP hits or remove
+- [ ] `onPlayerSearch` DB-per-keystroke pattern — consider caching full history and filtering in memory

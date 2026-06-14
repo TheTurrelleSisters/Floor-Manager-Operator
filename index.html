@@ -260,7 +260,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
     <div id="loading-track"><div id="loading-bar"></div></div>
     <div id="loading-text">Connecting&hellip;</div>
   </div>
-  <div id="splash-ver">v1.7</div>
+  <div id="splash-ver">v1.10</div>
 </div>
 
 <!-- ══ LOCK SCREEN ══ -->
@@ -317,7 +317,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════
-   FLOOR MANAGER v1.1
+   FLOOR MANAGER v1.10
    Stray-Pup LLC / The Turrelle Sisters LLC
    Gold Coins Casino
    ══════════════════════════════════════════════════════════════════════ */
@@ -500,24 +500,6 @@ var _floorPresenceRetryDelay = 2000;
 function _subscribePresence() {
   var sessionKey = 'floor_' + Math.random().toString(36).substr(2, 9);
   _doSubscribePresence(sessionKey);
-
-  /* PRESENCE HEARTBEAT (every 60s): full teardown+recreate of the
-     presence channel. Guards against a "zombie" channel — a silent
-     socket reconnect (Supabase free-tier Realtime tenant cold-start)
-     can leave this channel joined locally but dead server-side, with
-     no CHANNEL_ERROR ever firing. */
-  setInterval(function () {
-    if (!_client) return;
-    var _old = _presenceCh;
-    try {
-      var _rm = _client.removeChannel(_old);
-      if (_rm && typeof _rm.then === 'function') {
-        _rm.then(function(){ _doSubscribePresence(sessionKey); }).catch(function(){ _doSubscribePresence(sessionKey); });
-      } else {
-        _doSubscribePresence(sessionKey);
-      }
-    } catch (e) { _doSubscribePresence(sessionKey); }
-  }, 60000);
 }
 function _doSubscribePresence(sessionKey) {
   _presenceCh = _client.channel('presence-lobby', {
@@ -540,7 +522,11 @@ function _doSubscribePresence(sessionKey) {
       if (status === 'SUBSCRIBED') {
         _floorPresenceRetryDelay = 2000;
         _presenceCh.track({ gameId: 'floor_operator', joinedAt: new Date().toISOString() });
+        /* Call _sync (not just renderTab) so _presenceState is populated from
+           the live channel state immediately. Two passes cover free-tier cold-start
+           where channel hydration can be delayed up to ~2 seconds. */
         setTimeout(_sync, 500);
+        setTimeout(_sync, 2000);
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         console.warn('[Floor] presence channel ' + status + ' — reconnecting in ' + (_floorPresenceRetryDelay/1000) + 's');
         var _old = _presenceCh;
@@ -610,6 +596,9 @@ function _startAutoRefresh() {
   if (_autoRefresh) clearInterval(_autoRefresh);
   if (_autoRefreshMs <= 0) return;
   _autoRefresh = setInterval(function() {
+    /* Re-sync presence from live channel state before re-rendering,
+       so _presenceState is never stale between presence events. */
+    if (_presenceCh) { try { var s=_presenceCh.presenceState(); _presenceState={}; Object.keys(s).forEach(function(k){var e=s[k];if(e&&e.length>0)_presenceState[k]=e[0];}); } catch(e) {} }
     if (_activeTab === 'dashboard') { try { renderTab(); } catch(e) {} }
   }, _autoRefreshMs);
 }
@@ -722,7 +711,8 @@ function renderDashboard(el) {
       var gPlayers = 0;
       Object.keys(_presenceState).forEach(function(k) {
         var p = _presenceState[k];
-        if (p && p.gameId === gid) gPlayers++;
+        if (!p || p.gameId === 'operator' || p.gameId === 'wabc_operator' || p.gameId === 'floor_operator') return;
+        if (p.gameId === gid) gPlayers++;
       });
       html += '<div class="game-card">';
       html += '<div class="game-card-hdr">';
@@ -1017,11 +1007,13 @@ function renderPlayers(el) {
 
 function onPlayerSearch(val) {
   _playerSearch = val;
+  /* Filter from the already-loaded tab content — no re-fetch needed */
+  var el = document.getElementById('tab-content');
+  if (!el) return;
   var pl = document.getElementById('players-list');
   if (!pl) return;
-  /* Re-filter from cached history */
   fetchAllHistory(function(all) {
-    _buildPlayersList(all, document.getElementById('tab-content'));
+    _buildPlayersList(all, el);
   });
 }
 
@@ -1220,7 +1212,7 @@ function renderSettings(el) {
   html += '<div class="section">';
   html += '<div class="sec-title">&#8505; About</div>';
   html += '<div style="font-size:10px;color:var(--dim);line-height:1.9;">';
-  html += 'Floor Manager v1.4<br>';
+  html += 'Floor Manager v1.10<br>';
   html += 'Gold Coins Casino &bull; Stray-Pup LLC<br>';
   html += 'Games: StrayPups $1 &bull; StrayPups $5<br>';
   html += 'History: 24-hour rolling window<br>';
@@ -1244,7 +1236,9 @@ function archiveAll() {
   _client.from('game_history').update({ archived: true }).eq('archived', false)
     .then(function(res) {
       if (res.error) { toast('Failed: ' + res.error.message); return; }
+      _history = [];
       toast('All records archived');
+      renderTab();
     });
 }
 
@@ -1254,7 +1248,9 @@ function hardDeleteArchived() {
   _client.from('game_history').delete().eq('archived', true)
     .then(function(res) {
       if (res.error) { toast('Failed: ' + res.error.message); return; }
+      _history = [];
       toast('Archived records permanently deleted');
+      renderTab();
     });
 }
 
