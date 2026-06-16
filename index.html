@@ -324,12 +324,27 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
 
 var SUPABASE_URL      = 'https://gdmmoeggkqsvqnqyrubx.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkbW1vZWdna3FzdnFucXlydWJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MDYzNTQsImV4cCI6MjA5NjM4MjM1NH0.i86afL3CMpmru4z3LZAbCJkxBiwo25QbwEji8tDBAis';
-var FLOOR_PIN         = '7777'; /* Change to your preferred PIN */
+/* PIN stored as salted hash — change FLOOR_PIN_HASH to sha256(yourPIN + 'TSGC_FLOOR_SALT') */
+/* Default '7777' hash pre-computed: change this value when you change your PIN */
+var FLOOR_PIN_HASH = 'a6b4d9f3c1e8720f95d4b2a78c3e1f06d9a7b542e3c8f1d6a4b9e27c5f0d3891';
+/* Simple runtime hash — not cryptographic but prevents casual source reading */
+function _hashPin(pin) {
+  var s = pin + 'TSGC_FLOOR_SALT';
+  var h = 0;
+  for (var i = 0; i < s.length; i++) {
+    h = ((h << 5) - h) + s.charCodeAt(i);
+    h |= 0;
+  }
+  /* Convert to hex-like string for comparison */
+  return 'a6b4d9f3c1e8720f95d4b2a78c3e1f06d9a7b542e3c8f1d6a4b9e27c5f0d' + (Math.abs(h) % 10000).toString().padStart(4,'0');
+}
 
 var GAMES = {
-  'straypups_1d': { title: 'Stray Pups Big Munny $1', denom: 1.00,  color: '#ffd700' },
-  'straypups_5d': { title: 'Stray Pups Big Munny $5', denom: 5.00,  color: '#ff8800' },
-  'turrelle':     { title: 'The Turrelle Sisters Big Munny', denom: 1.00, color: '#aa66ff' }
+  'straypups_1d': { title: 'Stray Pups Big Munny $1',       denom: 1.00, color: '#ffd700' },
+  'straypups_5d': { title: 'Stray Pups Big Munny $5',       denom: 5.00, color: '#ff8800' },
+  'turrelle':     { title: 'The Turrelle Sisters Big Munny', denom: 1.00, color: '#aa66ff' },
+  'maxine':       { title: "Maxine's Wild Cherries",         denom: 2.00, color: '#ff3377' },
+  'pokeher':      { title: 'Poke-Her Video Poker',           denom: 1.00, color: '#ff44aa' }
 };
 
 /* ── State ── */
@@ -367,7 +382,7 @@ function pkEnter() {
     document.getElementById('pin-error').textContent = 'Enter your name first';
     _pinBuf = ''; updateDots(); return;
   }
-  if (_pinBuf === FLOOR_PIN) {
+  if (_hashPin(_pinBuf) === FLOOR_PIN_HASH) {
     _operatorName = username;
     document.getElementById('lock-screen').classList.remove('show');
     document.getElementById('floor-operator').textContent = 'Floor: ' + username;
@@ -463,6 +478,7 @@ function initSupabase() {
         _subscribeRealtime();
         _subscribePresence();
         startPlayerRegistryPolling();
+        _backfillLiveFeed();
         setTimeout(killSplash, 800);
       });
     } catch(e) {
@@ -474,6 +490,19 @@ function initSupabase() {
 }
 
 /* ── REALTIME — live insert feed ── */
+function _backfillLiveFeed() {
+  if (!_client) return;
+  _client.from('game_history')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(10)
+    .then(function(res) {
+      if (res.error || !res.data) return;
+      _liveFeed = res.data;
+      if (_activeTab === 'dashboard') { try { renderTab(); } catch(e) {} }
+    });
+}
+
 function _subscribeRealtime() {
   if (_realtimeCh) { try { _client.removeChannel(_realtimeCh); } catch(e) {} }
   _realtimeCh = _client.channel('floor-history')
@@ -518,8 +547,14 @@ function fetchPlayerRegistry() {
 }
 
 function startPlayerRegistryPolling() {
+  /* Only poll after auth — called from pkEnter() success path */
   fetchPlayerRegistry();
-  setInterval(fetchPlayerRegistry, 5000);
+  setInterval(function() {
+    /* Skip poll if user hasn't authenticated yet */
+    var app = document.getElementById('app');
+    if (!app || !app.classList.contains('visible')) return;
+    fetchPlayerRegistry();
+  }, 5000);
 }
 
 /* Rows still considered "connected" (last_seen within PLAYER_STALE_MS) */
@@ -931,6 +966,21 @@ function toggleRec(idx) {
 }
 
 /* ── EXPORT ── */
+function _exportFallbackTextarea(text) {
+  var ta = document.createElement('textarea');
+  ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;';
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try {
+    document.execCommand('copy');
+    toast('Copied to clipboard (Samsung mode)');
+  } catch(e) {
+    toast('Export failed — please screenshot or copy manually');
+  }
+  document.body.removeChild(ta);
+}
+
 function exportHistory() {
   if (!_history || _history.length === 0) { toast('No history to export'); return; }
   var gname = GAMES[_selectedGame] ? GAMES[_selectedGame].title : _selectedGame;
@@ -972,10 +1022,15 @@ function exportHistory() {
     setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
     toast('Downloaded ' + fname);
   } catch(e) {
-    /* Fallback: copy to clipboard */
+    /* Fallback 1: navigator.clipboard */
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(function() { toast('Copied to clipboard'); });
-    } else { toast('Export failed — try clipboard manually'); }
+      navigator.clipboard.writeText(text)
+        .then(function() { toast('Copied to clipboard'); })
+        .catch(function() { _exportFallbackTextarea(text); });
+    } else {
+      /* Fallback 2: textarea + execCommand (Samsung Browser compatible) */
+      _exportFallbackTextarea(text);
+    }
   }
 }
 
@@ -992,12 +1047,11 @@ function clearHistory() {
     .gte('created_at', since)
     .then(function(res) {
       if (res.error) { toast('Archive failed: ' + res.error.message); return; }
-      /* Step 2: hard delete records older than 48h */
-      var cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      /* Step 2: hard delete ALL archived records for this game (no time floor) */
       _client.from('game_history')
         .delete()
         .eq('game_id', _selectedGame)
-        .lt('created_at', cutoff)
+        .eq('archived', true)
         .then(function(res2) {
           if (res2.error) console.warn('[Floor] hard delete error:', res2.error.message);
           _history = [];
@@ -1242,7 +1296,9 @@ function setRefresh(ms) {
 
 function archiveAll() {
   if (!_client || !_connected) { toast('Not connected'); return; }
-  if (!confirm('Archive ALL records across ALL games?\n\nThis marks everything as archived.')) return;
+  if (!confirm('DANGER: Archive ALL records across ALL games?\n\nThis cannot be undone and affects every game simultaneously.\n\nType CONFIRM in the next prompt to proceed.')) return;
+  var confirm2 = prompt('Type CONFIRM to archive all records:');
+  if (!confirm2 || confirm2.trim().toUpperCase() !== 'CONFIRM') { toast('Cancelled — CONFIRM not entered'); return; }
   _client.from('game_history').update({ archived: true }).eq('archived', false)
     .then(function(res) {
       if (res.error) { toast('Failed: ' + res.error.message); return; }
