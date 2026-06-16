@@ -155,3 +155,29 @@ Cache bust: floor-v1.9
   (several releases behind), and the games list was missing $5 naming
   update + TSBIGMUNNY entirely. Now reads v1.10 and lists all 3 games.
 - Cache bust: floor-v1.10.
+
+
+### v1.11 — EMERGENCY: Cache Version Mismatch Fix
+
+**ROOT CAUSE:** CACHE_VER was `floor-v1.9` while splash displayed `v1.10`.
+Browser served stale cache — v1.10 content was never installed.
+
+**Fix:** CACHE_VER bumped to `floor-v1.11`, splash updated to `v1.11`.
+
+- Cache bust: floor-v1.11
+
+
+### v1.12 — Icons Missing + PIN Hash Wrong
+
+**ROOT CAUSE 1 — Icons:** `icons/` folder was never included in the Floor Manager
+repo. The manifest referenced `icons/icon-*.png` but the folder didn't exist,
+causing 404 errors in the browser console and PWA install failures.
+**Fix:** Copied `icons/` folder from Progressive Operator (all 8 sizes).
+
+**ROOT CAUSE 2 — PIN:** `FLOOR_PIN_HASH` stored value (`...3891`) did not match
+the output of `_hashPin('7777')` (`...2605`). The hash was set incorrectly at
+some point — `7777` was never a valid PIN for this tool.
+**Fix:** Replaced with the correct computed hash for `7777`.
+PIN `7777` now works.
+
+- Cache bust: floor-v1.12

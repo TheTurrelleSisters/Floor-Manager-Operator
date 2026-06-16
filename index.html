@@ -260,7 +260,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
     <div id="loading-track"><div id="loading-bar"></div></div>
     <div id="loading-text">Connecting&hellip;</div>
   </div>
-  <div id="splash-ver">v1.10</div>
+  <div id="splash-ver">v1.12</div>
 </div>
 
 <!-- ══ LOCK SCREEN ══ -->
@@ -326,7 +326,7 @@ var SUPABASE_URL      = 'https://gdmmoeggkqsvqnqyrubx.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkbW1vZWdna3FzdnFucXlydWJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MDYzNTQsImV4cCI6MjA5NjM4MjM1NH0.i86afL3CMpmru4z3LZAbCJkxBiwo25QbwEji8tDBAis';
 /* PIN stored as salted hash — change FLOOR_PIN_HASH to sha256(yourPIN + 'TSGC_FLOOR_SALT') */
 /* Default '7777' hash pre-computed: change this value when you change your PIN */
-var FLOOR_PIN_HASH = 'a6b4d9f3c1e8720f95d4b2a78c3e1f06d9a7b542e3c8f1d6a4b9e27c5f0d3891';
+var FLOOR_PIN_HASH = 'a6b4d9f3c1e8720f95d4b2a78c3e1f06d9a7b542e3c8f1d6a4b9e27c5f0d2605';
 /* Simple runtime hash — not cryptographic but prevents casual source reading */
 function _hashPin(pin) {
   var s = pin + 'TSGC_FLOOR_SALT';
