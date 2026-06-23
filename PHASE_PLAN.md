@@ -4,18 +4,20 @@
 
 ---
 
-## Current Version: v1.1 (cache: floor-v1.1)
+## Current Version: v2.0 (cache: floor-v2.0)
 
 ---
 
 ## Repo Overview
-Casino floor management PWA. PIN-protected. Reads game_history table via Supabase Realtime. Shows live activity across all StrayPups games, per-player stats, export, and archive controls.
+Casino floor management PWA. PIN-protected. Reads live data from Supabase across
+game_history, player_registry, progressive, progressive_hits, progressive_commands,
+wallet, vouchers, wallet_config, and messages tables. Full suite of floor operations.
 
 ---
 
 ## Phase History
 
-### v1.0 — Initial Build (version string bug — never deployed)
+### v1.0 — Initial Build
 - Splash + PIN + username
 - Dashboard: 24h stats grid, per-game quick cards, live feed
 - Games tab: per-game history, expandable records, export .txt, archive & clear
@@ -26,158 +28,146 @@ Casino floor management PWA. PIN-protected. Reads game_history table via Supabas
 
 ### v1.1 — Version String Fix
 - Fixed: splash-ver and About section showed v1.0 while cache was floor-v1.1
-- All version strings now consistent: v1.1 / floor-v1.1
-- Cache bust: floor-v1.1
-
----
-
-## Dependencies
-- game_history table must exist (SETUP_game_history.sql)
-- StrayPups games v5.45+ required for game_history writes
-- icons/ folder must be copied from progressive_operator repo
-
----
-
-## Pending
-- [ ] First live test with game clients writing to game_history
-- [ ] Player tab verified with real nicknames
-- [ ] Export .txt download tested on mobile
-- [ ] Archive & Clear tested
-- [ ] Answer open questions: A) anon key read security B) progressive_hits integration C) 24h cleanup schedule
-
----
-
-## Rules
-- ES5 only
-- All logic inline in index.html
-- Cache bust on every single build
 
 ### v1.2 — Splash Error + Retry + DOM Removal
 - killSplash fixed to remove splash from DOM entirely
 - splashError() added — red error + RETRY button on any connection failure
-- All setTimeout retry loops replaced with splashError()
-- SDK cleanup added before each retry
-- Cache bust: floor-v1.2
 
 ### v1.3 — SDK Cleanup Improvement
 - window.supabase cleared before each retry
 - window._sbScriptEl tracks script for proper cleanup on retry
-- Cache bust: floor-v1.3
+
+### v1.4 — Legacy JWT Anon Key Fix
+- sb_publishable_ broken for Realtime WebSocket — fixed
+
+### v1.5 — Service Worker + Supabase Client Hardening
+- SW fetch handler: non-GET, supabase.co, and 206 all bypass cache
+- createClient() passes in-memory no-op storage (avoids Samsung/Safari ITP blocks)
+
+### v1.6 — Presence Retry Fix
+- Exponential backoff retry (2s->30s cap) for presence channel errors
+
+### v1.7 — Presence Heartbeat (REVERTED)
+- Added 60s heartbeat — caused console flood + lockup — reverted entirely
+
+### v1.9 — Connected Players now from player_registry
+- player_registry (durable DB) replaces presence-lobby for player counts
+- "Connected" = last_seen within 3 min; polled every 5s
+
+### v1.10 — Friendly game-name update + TSBIGMUNNY
+- GAMES map updated: Stray Pups $1/$5, The Turrelle Sisters Big Munny added
+- Maxine's Wild Cherries + Poke-Her added to GAMES map
+
+### v1.11 — EMERGENCY: Cache Version Mismatch Fix
+- CACHE_VER was floor-v1.9 while splash showed v1.10 — stale cache served
+
+### v1.12 — Icons + PIN Hash Fix
+- icons/ folder added (all 8 sizes copied from Progressive Operator)
+- FLOOR_PIN_HASH corrected for PIN 7777
 
 ---
 
-## Current Version: v1.3 (cache: floor-v1.3)
+## v2.0 — Major Feature Release: Wallet, Progressive, Messages (2026-06-23)
 
-## Pending
-- [ ] First live test with games writing to game_history
-- [ ] Player tab verified with real nicknames
-- [ ] Export .txt download tested on mobile
-- [ ] Neon.tech migration — Realtime replacement needed
+### Summary
+Full UI redesign. Tab bar rebuilt as 7-tab icon-only single row. Three new
+feature tabs added. All existing tabs preserved and updated.
 
-### v1.4 — CRITICAL: Legacy JWT Anon Key Fix
-- Same fix — sb_publishable_ broken for Realtime WebSocket
-- Cache bust: floor-v1.4
+### New Tab Structure (icons only, single row)
+| Icon | Tab        | Description                                         |
+|------|------------|-----------------------------------------------------|
+| 📊   | Dashboard  | 24h stats + per-game cards + live feed (unchanged)  |
+| 🎮   | Games      | Per-game history, export, archive (unchanged)       |
+| 👤   | Players    | Nickname search + per-player stats (unchanged)      |
+| 💰   | Wallet     | Player wallet + voucher viewer (NEW, read-only)     |
+| 🎯   | Progressive| Jackpot pot + hits + command history (NEW, read-only)|
+| 📨   | Messages   | Operator inbox + compose + delete (NEW)             |
+| ⚙️   | Settings   | Auto-refresh + connection + danger zone (updated)   |
 
-### Service Worker + Supabase Client Hardening (this batch)
-- service-worker.js fetch handler rewritten with proper guards:
-  - Non-GET requests (POST/PATCH/PUT/DELETE) are no longer intercepted at
-    all -> eliminates "cache.put: Request method X is unsupported" errors
-    on every Supabase RPC/insert/update.
-  - ANY supabase.co request is passed straight to network, never cached ->
-    eliminates risk of stale cached API responses masking live DB changes,
-    and removes these requests from the JS/HTML cache-refresh branch.
-  - 206 Partial Content responses (audio/video range requests) are no
-    longer passed to cache.put -> eliminates "Partial response (206)
-    unsupported" errors.
-- createClient() calls now pass { auth: { persistSession:false,
-  detectSessionInUrl:false, storage: <in-memory no-op> } } — avoids
-  Supabase client touching localStorage at all, which browsers with
-  Tracking Prevention (Safari ITP, Samsung Browser) were silently
-  blocking ("Tracking Prevention blocked access to storage for
-  ...supabase-js...") and which also triggered "Multiple GoTrueClient
-  instances" warnings.
-These changes target the console error noise seen across every tool in
-this session's logs and may also help Realtime stability (all channels
-share one client/connection). 0-players root cause still unconfirmed —
-retest after this deploy with game + operator tool open simultaneously.
+### Wallet Tab (NEW — read-only)
+- Platform wallet_config max_voucher_default displayed at top
+- Nickname search input (400ms debounced) — fetches wallet + vouchers
+- Balance display card with custom max_voucher if set
+- Wallet detail row: nickname, balance, max voucher, last updated
+- Available vouchers list: amount, source_game, created_at
+- Redeemed vouchers list: amount, source_game, redeemed_at
+- Polls every 15s while on wallet tab with active search
+- NO write operations — view only
 
-KNOWN OPEN ISSUE (not yet investigated): both StrayPups games appear to be
-broadcasting DIFFERENT ball-call sequences again (regression) — possible
-WABC/local-vs-wide-area switching issue. To be investigated next session.
+### Progressive Tab (NEW — read-only)
+- Live jackpot pot value with glow display
+- Armed/Ready badge (reads progressive.armed column — added in db_cleanup.sql)
+- Config panel: seed, ceiling, contrib_rate, trigger_odds, hit_count, updated_at
+  NOTE: "Read-only — edit in Prog. Operator" label shown
+- Recent jackpot hits (last 30 days, last 20): amount, player, game, pattern, balls, datetime
+- Command history (last 50): command, status badge, created_by, armed_at, winner info
+- Polled every 10s
+- Realtime subscription on:
+  - progressive UPDATE → live pot + armed state refresh
+  - progressive_hits INSERT → new hit prepended instantly
+  - progressive_commands INSERT/UPDATE → command list updated instantly
 
+### Messages Tab (NEW — read + write)
+- Reads new public.messages table (subject/type/icon/dismissed_by schema)
+- broadcast_messages table is DROPPED per db_cleanup.sql Section 5 — not referenced here
+- Compose button → inline compose panel with:
+  - Type selector: general / jackpot / event / bonus (with color-coded active states)
+  - Subject input (max 120 chars)
+  - Body textarea
+  - Send → INSERT into messages
+- Message board: all messages sorted newest-first
+  - Subject, type badge with icon, body, created_by, created_at, dismiss count
+  - Delete button per message → hard DELETE (removes for all players)
+- Unread badge on tab icon — increments on realtime INSERT from other senders
+  cleared when Messages tab is opened
+- Realtime subscription on messages INSERT + DELETE
 
-### v1.6 — Presence Retry Fix
-Same one-shot-subscribe presence bug as games/Progressive Operator — fixed
-with exponential backoff retry (2s->30s cap).
-Cache bust: floor-v1.6
+### Dashboard Enhancement
+- Progressive pot quick-stat bar added below 24h stats grid
+  (shows live pot value + ARMED badge if armed)
 
-### v1.7 — Presence Heartbeat (zombie-channel fix)
-Same hypothesis as the games: a zombie presence channel
-(silent socket reconnect with no CHANNEL_ERROR/CLOSED) could leave this
-tool unable to see other presences with no visible error. Added a 60s
-heartbeat: fully removeChannel + recreate the presence channel on a fixed
-interval.
-Cache bust: floor-v1.7
+### Settings Updates
+- Connection panel redesigned as data-card with info rows
+- Cache version (floor-v2.0) displayed
+- About section redesigned as data-card
 
-### REVERT — Presence Heartbeat removed (caused console flood + lockup)
-v3.18/v1.16/v1.7's 60s heartbeat caused console flooding and a system
-lockup, most likely from racing with the existing error-retry logic and/or
-hitting free-tier Realtime rate limits via frequent channel churn.
-REVERTED ENTIRELY — back to one-shot subscribe + error-triggered retry.
-"0 players with active games" remains OPEN.
-Cache bust: see service-worker.js
+### New Realtime Channels
+- floor-progressive: progressive UPDATE, progressive_hits INSERT,
+  progressive_commands INSERT + UPDATE
+- floor-messages: messages INSERT + DELETE
+- All channels use same reconnect pattern (3s retry on error/timeout/close)
 
-### v1.9 — Connected Players now from player_registry
-Connected/Inactive counts and player lists now read from
-player_registry (durable DB table) instead of presence-lobby (ephemeral
-Realtime state, unreliable all session). "Connected" = last_seen within
-3 minutes; "Inactive" (no spin in 60s+) = last_seen 60s-3min ago. Polled
-every 5s. Requires the NEW touch_player_last_seen SQL RPC (see games
-PHASE_PLAN v5.84) and game build v5.84+ to keep last_seen fresh for
-nickname-less players too.
-Cache bust: floor-v1.9
+### New State Variables
+```
+_walletSearch, _walletData, _walletVouchers, _walletConfig, _walletPollTimer
+_progRow, _progHits, _progCmds, _progPollTimer, _progCh
+_messages, _msgUnread, _msgComposing, _msgDraftType, _msgDraftSubject, _msgDraftBody, _msgCh
+```
 
+### Schema dependencies (must be live before v2.0 deploys)
+- progressive.armed boolean column (db_cleanup.sql Section 3)
+- broadcast_messages DROPPED (db_cleanup.sql Section 5)
+- public.messages new schema (messages_restructure.sql)
+- wallet, vouchers, wallet_config tables (Phase 1b SQL — already live)
 
-### v1.10 — Friendly game-name update + TSBIGMUNNY now visible
-- GAMES map: 'StrayPups Big Munny $1'/'$5' -> 'Stray Pups Big Munny
-  $1'/'$5'; NEW entry 'turrelle': 'The Turrelle Sisters Big Munny'
-  (color #aa66ff). Companion rename in both bingo games (v5.87),
-  progressive_operator (v3.21), and tsbigmunny (v8.2.2).
-- tsbigmunny (game_id 'turrelle') previously called register_player but
-  NEVER updated player_registry.last_seen (no touch_player_last_seen) and
-  registerPlayer was never even called from its game.js -- so it never
-  appeared in player_registry at all. Fixed in tsbigmunny v8.2.2 (see
-  tsbigmunny/PHASE_PLAN.md); fetchPlayerRegistry()/_connectedPlayers()
-  here are unfiltered by game_id, so tsbigmunny players are now correctly
-  included in Connected/Inactive counts with no changes needed on this
-  side beyond the GAMES map entry above (for per-game name display).
-- Fixed stale "About" section: version string was hardcoded at v1.4
-  (several releases behind), and the games list was missing $5 naming
-  update + TSBIGMUNNY entirely. Now reads v1.10 and lists all 3 games.
-- Cache bust: floor-v1.10.
+### Cache bust: floor-v2.0
 
+---
 
-### v1.11 — EMERGENCY: Cache Version Mismatch Fix
+## Pending / Known Open Issues
+- [ ] First live test of Wallet tab with real player nicknames
+- [ ] Progressive tab: verify armed badge reflects actual progressive.armed state
+- [ ] Messages tab: verify realtime INSERT fires on compose from Floor Manager
+- [ ] Confirm dismiss_count display renders correctly (jsonb array length)
+- [ ] Export .txt still needs live mobile test
+- [ ] "0 players with active games" root cause still OPEN (player_registry last_seen lag)
 
-**ROOT CAUSE:** CACHE_VER was `floor-v1.9` while splash displayed `v1.10`.
-Browser served stale cache — v1.10 content was never installed.
+---
 
-**Fix:** CACHE_VER bumped to `floor-v1.11`, splash updated to `v1.11`.
-
-- Cache bust: floor-v1.11
-
-
-### v1.12 — Icons Missing + PIN Hash Wrong
-
-**ROOT CAUSE 1 — Icons:** `icons/` folder was never included in the Floor Manager
-repo. The manifest referenced `icons/icon-*.png` but the folder didn't exist,
-causing 404 errors in the browser console and PWA install failures.
-**Fix:** Copied `icons/` folder from Progressive Operator (all 8 sizes).
-
-**ROOT CAUSE 2 — PIN:** `FLOOR_PIN_HASH` stored value (`...3891`) did not match
-the output of `_hashPin('7777')` (`...2605`). The hash was set incorrectly at
-some point — `7777` was never a valid PIN for this tool.
-**Fix:** Replaced with the correct computed hash for `7777`.
-PIN `7777` now works.
-
-- Cache bust: floor-v1.12
+## Permanent Rules
+- ES5 only — no Object.assign, no optional chaining, no arrow functions in logic
+- All logic inline in index.html (single file)
+- Cache bust (CACHE_VER in service-worker.js + splash-ver + About section) on EVERY build
+- Never modify splash_screen.jpg or any uploaded asset with code
+- Follow PHASE_PLAN before any change
+- Ask clarifying questions before applying any change or fix
