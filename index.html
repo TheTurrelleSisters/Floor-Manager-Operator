@@ -459,10 +459,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
    FLOOR MANAGER v2.0
    Stray-Pup LLC / The Turrelle Sisters LLC
    Gold Coins Casino
-   Cache: floor-v2.1
+   Cache: floor-v2.2
    ══════════════════════════════════════════════════════════════════════ */
 
-var CACHE_VER         = 'floor-v2.1';
+var CACHE_VER         = 'floor-v2.2';
 var SUPABASE_URL      = 'https://gdmmoeggkqsvqnqyrubx.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkbW1vZWdna3FzdnFucXlydWJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MDYzNTQsImV4cCI6MjA5NjM4MjM1NH0.i86afL3CMpmru4z3LZAbCJkxBiwo25QbwEji8tDBAis';
 var FLOOR_PIN_HASH    = 'a6b4d9f3c1e8720f95d4b2a78c3e1f06d9a7b542e3c8f1d6a4b9e27c5f0d2605';
@@ -494,11 +494,54 @@ var GAMES = {
    lookup so historical data is attributed to the right game instead of
    showing a raw slug. Confirmed present in vouchers.source_game:
    'tsbigmunny' (6 rows) and 'maxines' (5 rows). */
-var GAME_ALIASES = {
-  'tsbigmunny': 'turrelle',
-  'maxines':    'maxine'
-};
+/* ══════════════════════════════════════════════════════════════════════
+   SHARED GAME REGISTRY — loaded from Supabase `games` + `game_aliases`.
+   Previously each operator tool kept its own hardcoded list. All three had
+   drifted apart and every one was incomplete: Floor Manager omitted
+   turrelle_big_munny_2 (the highest-volume game), Progressive Operator
+   omitted it and pokeher, and WABC used the id 'tsbigmunny' which never
+   matched the live 'turrelle'. Adding a game is now one DB row, not three
+   code edits. The hardcoded map below stays ONLY as an offline fallback.
+   ══════════════════════════════════════════════════════════════════════ */
+var GAME_ALIASES = { 'tsbigmunny': 'turrelle', 'maxines': 'maxine' };
 function _canonGame(id) { return GAME_ALIASES[id] || id; }
+
+function loadGameRegistry(client, done) {
+  if (!client) { if (done) done(false); return; }
+  client.from('games').select('*').order('sort_order', {ascending:true})
+    .then(function(r) {
+      if (r.error || !r.data || !r.data.length) {
+        console.warn('[games] falling back to built-in registry:',
+                     r.error ? r.error.message : 'empty');
+        if (done) done(false); return;
+      }
+      var next = {};
+      for (var i = 0; i < r.data.length; i++) {
+        var g = r.data[i];
+        if (g.active === false) continue;
+        next[g.game_id] = {
+          title: g.title, short: g.short_name, cls: g.game_class,
+          denom: parseFloat(g.denom) || 1, color: g.color || '#888',
+          sort: g.sort_order
+        };
+      }
+      GAMES = next;
+      console.log('[games] registry loaded from Supabase:',
+                  Object.keys(GAMES).length + ' games');
+      return client.from('game_aliases').select('alias,game_id');
+    })
+    .then(function(r) {
+      if (r && !r.error && r.data) {
+        for (var i = 0; i < r.data.length; i++)
+          GAME_ALIASES[r.data[i].alias] = r.data[i].game_id;
+      }
+      if (done) done(true);
+    })
+    .catch(function(e) {
+      console.warn('[games] registry load failed, using fallback:', e && e.message);
+      if (done) done(false);
+    });
+}
 
 /* ── State ── */
 var _client           = null;
@@ -646,6 +689,14 @@ function initSupabase() {
         setSplashStatus('Connected \u2713');
         document.getElementById('conn-badge').className = 'ok';
         document.getElementById('conn-badge').textContent = 'LIVE';
+        /* v-registry: pull the shared game list from Supabase before the
+           first render, so newly added games appear with no redeploy.
+           Falls back silently to the built-in map if the table is
+           unreachable. */
+        loadGameRegistry(_client, function(ok) {
+          console.log('[games] registry source:', ok ? 'supabase' : 'built-in fallback');
+          try { if (typeof renderTab === 'function') renderTab(); } catch(e) {}
+        });
         _subscribeRealtime();
         _subscribePresence();
         _subscribeMessages();
