@@ -436,6 +436,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
   </div>
 
   <!-- 7-tab icon-only bar -->
+  <div id="refresh-ctl" style="display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:4px 10px;font-size:9px;letter-spacing:1px;">
+    <span id="refresh-badge" style="font-weight:900;color:#00cfff;">&#9679; LIVE</span>
+    <button onclick="toggleRefreshPause()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:#c9ced6;border-radius:6px;padding:3px 10px;font-size:9px;letter-spacing:1px;cursor:pointer;">PAUSE</button>
+  </div>
   <div id="tab-bar">
     <div class="tab active"  id="tb-dashboard"  onclick="showTab('dashboard')" title="Dashboard">&#128202;</div>
     <div class="tab"         id="tb-games"       onclick="showTab('games')"     title="Games">&#127918;</div>
@@ -459,10 +463,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
    FLOOR MANAGER v2.0
    Stray-Pup LLC / The Turrelle Sisters LLC
    Gold Coins Casino
-   Cache: floor-v2.2
+   Cache: floor-v2.3
    ══════════════════════════════════════════════════════════════════════ */
 
-var CACHE_VER         = 'floor-v2.2';
+var CACHE_VER         = 'floor-v2.3';
 var SUPABASE_URL      = 'https://gdmmoeggkqsvqnqyrubx.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkbW1vZWdna3FzdnFucXlydWJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MDYzNTQsImV4cCI6MjA5NjM4MjM1NH0.i86afL3CMpmru4z3LZAbCJkxBiwo25QbwEji8tDBAis';
 var FLOOR_PIN_HASH    = 'a6b4d9f3c1e8720f95d4b2a78c3e1f06d9a7b542e3c8f1d6a4b9e27c5f0d2605';
@@ -693,6 +697,7 @@ function initSupabase() {
            first render, so newly added games appear with no redeploy.
            Falls back silently to the built-in map if the table is
            unreachable. */
+        wmLoadPlayerList();   /* v2.3: populate the Wallet Manager player picker */
         loadGameRegistry(_client, function(ok) {
           console.log('[games] registry source:', ok ? 'supabase' : 'built-in fallback');
           try { if (typeof renderTab === 'function') renderTab(); } catch(e) {}
@@ -900,9 +905,11 @@ function startWalletPolling() {
     var app = document.getElementById('app');
     if (!app || !app.classList.contains('visible')) return;
     if (_activeTab === 'wallet' && _walletSearch) {
+      /* v2.3: was re-rendering mid-typing, wiping the search box. */
+      if (isBusy()) { _refreshDeferred = true; _setRefreshBadge('deferred'); return; }
       fetchWalletByNickname(_walletSearch, function(w, v) {
         _walletData = w; _walletVouchers = v;
-        try { renderTab(); } catch(e) {}
+        safeRender();
       });
     }
   }, 15000);
@@ -943,7 +950,7 @@ function startProgressivePolling() {
     var app = document.getElementById('app');
     if (!app || !app.classList.contains('visible')) return;
     fetchProgressiveData();
-    if (_activeTab === 'progressive') { try { renderTab(); } catch(e) {} }
+    if (_activeTab === 'progressive') safeRender();
   }, 10000);
 }
 
@@ -1009,12 +1016,107 @@ function fetchAllHistory(cb) {
     });
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════
+   v2.3 — REFRESH GUARD
+   renderTab() rewrites #tab-content wholesale via innerHTML, so every
+   auto-refresh destroyed expanded rows, scroll position and keyboard focus.
+   With three timers running (registry 5s, progressive 10s, dashboard 30s,
+   plus a wallet poller) anything you opened closed itself under you.
+
+   Three defences:
+     1. isBusy()   — never re-render while the operator is interacting:
+                     an input/textarea/select is focused, text is selected,
+                     a modal is open, or a row is expanded.
+     2. deferred   — a refresh blocked by isBusy() is not lost; it is
+                     re-attempted once the operator goes idle.
+     3. preserve   — scroll position and focus are restored around any
+                     re-render that does happen.
+   PAUSE puts the operator in control: nothing auto-refreshes until resumed.
+   ══════════════════════════════════════════════════════════════════════ */
+var _refreshPaused  = false;
+var _refreshDeferred = false;
+var _lastInteractAt = 0;
+var IDLE_GRACE_MS   = 4000;   /* quiet period after the last interaction */
+
+document.addEventListener('click',  function(){ _lastInteractAt = Date.now(); }, true);
+document.addEventListener('keydown',function(){ _lastInteractAt = Date.now(); }, true);
+document.addEventListener('input',  function(){ _lastInteractAt = Date.now(); }, true);
+
+function isBusy() {
+  if (_refreshPaused) return true;
+  if (Date.now() - _lastInteractAt < IDLE_GRACE_MS) return true;
+  var a = document.activeElement;
+  if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
+  var sel = window.getSelection && window.getSelection();
+  if (sel && String(sel).length > 0) return true;
+  if (document.querySelector('.modal.open, .modal-open, [data-expanded="1"]')) return true;
+  return false;
+}
+
+/* Re-render only when it is safe; otherwise defer and retry when idle. */
+function safeRender() {
+  if (isBusy()) {
+    _refreshDeferred = true;
+    _setRefreshBadge('deferred');
+    return false;
+  }
+  var host = document.getElementById('tab-content');
+  var scrollY = window.scrollY || 0;
+  var innerY  = host ? host.scrollTop : 0;
+  var act = document.activeElement;
+  var actId = act && act.id ? act.id : null;
+  var selStart = (act && act.selectionStart != null) ? act.selectionStart : null;
+
+  try { renderTab(); } catch(e) { console.warn('[refresh] render failed:', e); }
+
+  window.scrollTo(0, scrollY);
+  var host2 = document.getElementById('tab-content');
+  if (host2) host2.scrollTop = innerY;
+  if (actId) {
+    var back = document.getElementById(actId);
+    if (back && back.focus) {
+      back.focus();
+      if (selStart != null && back.setSelectionRange) {
+        try { back.setSelectionRange(selStart, selStart); } catch(e) {}
+      }
+    }
+  }
+  _refreshDeferred = false;
+  _setRefreshBadge('live');
+  return true;
+}
+
+/* Flush a deferred refresh once the operator stops interacting. */
+setInterval(function() {
+  if (_refreshDeferred && !isBusy()) safeRender();
+}, 1000);
+
+function toggleRefreshPause() {
+  _refreshPaused = !_refreshPaused;
+  _setRefreshBadge(_refreshPaused ? 'paused' : 'live');
+  if (!_refreshPaused && _refreshDeferred) safeRender();
+}
+
+function _setRefreshBadge(state) {
+  var b = document.getElementById('refresh-badge');
+  if (!b) return;
+  var map = {
+    live:     ['\u25cf LIVE',     '#00cfff'],
+    paused:   ['\u23f8 PAUSED',   '#ffb020'],
+    deferred: ['\u23f3 HOLDING',  '#8a8f98']
+  };
+  var m = map[state] || map.live;
+  b.textContent = m[0];
+  b.style.color = m[1];
+}
+
 /* ── AUTO REFRESH ── */
 function _startAutoRefresh() {
   if (_autoRefresh) clearInterval(_autoRefresh);
   if (_autoRefreshMs <= 0) return;
   _autoRefresh = setInterval(function() {
-    if (_activeTab === 'dashboard') { try { renderTab(); } catch(e) {} }
+    if (_activeTab === 'dashboard') safeRender();
   }, _autoRefreshMs);
 }
 
@@ -1447,78 +1549,258 @@ function togglePlayer(idx) {
    WALLET TAB — VIEW ONLY
    ══════════════════════════════════════════════════════════════════════ */
 function renderWallet(el) {
+  /* ══════════════════════════════════════════════════════════════════════
+     v2.3 — USER VIRTUAL WALLET MANAGER (replaces the old read-only tab)
+     Pick a player, see their balance and vouchers, and edit both:
+       • adjust or set balance      • void a voucher
+       • change a voucher's amount  • create a voucher
+       • toggle redeemed/available
+     Every change writes a wallet_audit row. Amounts are validated before
+     any write, and destructive actions confirm first.
+     ══════════════════════════════════════════════════════════════════════ */
   var html = '';
 
-  /* Wallet Config bar */
   if (_walletConfig) {
-    html += '<div style="background:rgba(0,207,255,.06);border:1px solid rgba(0,207,255,.15);border-radius:8px;padding:8px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">';
+    html += '<div style="background:rgba(0,207,255,.06);border:1px solid rgba(0,207,255,.15);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">';
     html += '<span style="font-size:9px;color:var(--blue);letter-spacing:1px;text-transform:uppercase;">Platform Max Voucher</span>';
     html += '<span style="font-size:14px;font-weight:900;color:var(--gold);">' + _fmtMoney(_walletConfig.max_voucher_default) + '</span>';
     html += '</div>';
   }
 
-  /* Search */
-  html += '<input class="search-bar" id="wallet-search" type="text" placeholder="&#128176; Search player nickname\u2026" ' +
-    'value="' + (_walletSearch || '') + '" oninput="onWalletSearch(this.value)">';
+  /* ── Player picker: known players as chips, plus free text ── */
+  html += '<input class="search-bar" id="wallet-search" type="text" placeholder="&#128176; Search or pick a player&hellip;" ' +
+          'value="' + (_walletSearch || '') + '" oninput="onWalletSearch(this.value)">';
 
-  /* Results */
+  var known = _knownPlayers();
+  if (known.length) {
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px;">';
+    for (var k = 0; k < known.length; k++) {
+      var act = (_walletSearch && _walletSearch.toLowerCase() === known[k].toLowerCase());
+      html += '<button onclick="wmPick(\'' + _escq(known[k]) + '\')" style="' +
+              'background:' + (act ? 'rgba(0,207,255,.18)' : 'rgba(255,255,255,.05)') + ';' +
+              'border:1px solid ' + (act ? 'rgba(0,207,255,.5)' : 'rgba(255,255,255,.12)') + ';' +
+              'color:' + (act ? '#00cfff' : '#c9ced6') + ';border-radius:14px;padding:4px 12px;' +
+              'font-size:10px;letter-spacing:.5px;cursor:pointer;">' + _escHtml(known[k]) + '</button>';
+    }
+    html += '</div>';
+  }
+
   if (!_walletSearch) {
-    html += '<div class="empty-state">Enter a player nickname above<br>to view their wallet &amp; vouchers</div>';
-  } else if (_walletData === null && _walletSearch) {
-    html += '<div class="empty-state">No wallet found for &ldquo;' + _walletSearch + '&rdquo;</div>';
-  } else if (_walletData) {
-    /* Balance display */
-    html += '<div class="wallet-balance-display">';
-    html += '<div class="wallet-balance-amt">' + _fmtMoney(_walletData.balance) + '</div>';
-    html += '<div class="wallet-balance-lbl">Wallet Balance &mdash; ' + _walletData.nickname + '</div>';
-    if (_walletData.max_voucher !== null && _walletData.max_voucher !== undefined) {
-      html += '<div style="font-size:9px;color:#88ccaa;margin-top:6px;letter-spacing:1px;">Custom voucher max: ' + _fmtMoney(_walletData.max_voucher) + '</div>';
-    }
-    html += '</div>';
+    html += '<div class="empty-state">Pick a player above to view and manage their wallet</div>';
+    el.innerHTML = html; return;
+  }
+  if (_walletData === undefined) {
+    html += '<div class="empty-state">Loading&hellip;</div>';
+    el.innerHTML = html; return;
+  }
 
-    /* Wallet details */
-    html += '<div class="data-card">';
-    html += '<div class="data-card-hdr"><div class="data-card-title">&#128196; Wallet Details</div></div>';
-    html += '<div class="info-row"><span class="info-lbl">Nickname</span><span class="info-val gold">' + _walletData.nickname + '</span></div>';
-    html += '<div class="info-row"><span class="info-lbl">Balance</span><span class="info-val green">' + _fmtMoney(_walletData.balance) + '</span></div>';
-    html += '<div class="info-row"><span class="info-lbl">Max Voucher</span><span class="info-val">' + (_walletData.max_voucher !== null && _walletData.max_voucher !== undefined ? _fmtMoney(_walletData.max_voucher) : 'Platform default (' + (_walletConfig ? _fmtMoney(_walletConfig.max_voucher_default) : '\u2014') + ')') + '</span></div>';
-    html += '<div class="info-row"><span class="info-lbl">Last Updated</span><span class="info-val">' + _fmtDateTime(_walletData.updated_at) + '</span></div>';
-    html += '</div>';
+  var nick = _walletSearch;
+  var bal  = _walletData ? parseFloat(_walletData.balance) || 0 : 0;
 
-    /* Vouchers */
-    var available = _walletVouchers.filter(function(v){ return v.status === 'available'; });
-    var redeemed  = _walletVouchers.filter(function(v){ return v.status === 'redeemed'; });
+  /* ── Balance card + controls ── */
+  html += '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:14px;margin-bottom:12px;">';
+  html += '<div style="font-size:9px;letter-spacing:1px;color:#8a8f98;text-transform:uppercase;">Wallet Balance</div>';
+  html += '<div style="font-size:30px;font-weight:900;color:var(--gold);margin:2px 0 2px;">' + _fmtMoney(bal) + '</div>';
+  html += '<div style="font-size:10px;color:#8a8f98;">&#9733; ' + _escHtml(nick) +
+          (_walletData ? '' : ' &mdash; <span style="color:#ffb020;">no wallet row yet</span>') + '</div>';
 
-    html += '<div class="section">';
-    html += '<div class="sec-title">&#127976; Available Vouchers (' + available.length + ')</div>';
-    if (available.length === 0) {
-      html += '<div style="font-size:11px;color:var(--dim);padding:10px 0;">No available vouchers</div>';
-    } else {
-      available.forEach(function(v) {
-        html += '<div class="voucher-row">';
-        html += '<div><div class="voucher-amt">' + _fmtMoney(v.amount) + '</div>';
-        html += '<div class="voucher-meta">From: ' + (v.source_game || '\u2014') + ' &bull; ' + _fmtDateTime(v.created_at) + '</div></div>';
-        html += '<div class="voucher-status available">Available</div>';
-        html += '</div>';
-      });
-    }
-    html += '</div>';
+  html += '<div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;">';
+  html += '<input id="wm-amt" type="number" step="0.01" min="0" placeholder="Amount" style="flex:1;min-width:90px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:6px;padding:8px;font-size:13px;">';
+  html += '<button onclick="wmAdjust(1)"  style="' + _wmBtn('#1db954') + '">+ ADD</button>';
+  html += '<button onclick="wmAdjust(-1)" style="' + _wmBtn('#ff6b6b') + '">&minus; DEDUCT</button>';
+  html += '<button onclick="wmSetBalance()" style="' + _wmBtn('#00cfff') + '">SET TO</button>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:6px;margin-top:6px;">';
+  html += '<button onclick="wmNewVoucher()" style="' + _wmBtn('#ffd700') + 'flex:1;">&#43; CREATE VOUCHER</button>';
+  html += '</div>';
+  html += '</div>';
 
-    if (redeemed.length > 0) {
-      html += '<div class="section">';
-      html += '<div class="sec-title">&#10003; Redeemed Vouchers (' + redeemed.length + ')</div>';
-      redeemed.forEach(function(v) {
-        html += '<div class="voucher-row">';
-        html += '<div><div class="voucher-amt" style="color:var(--dim);">' + _fmtMoney(v.amount) + '</div>';
-        html += '<div class="voucher-meta">From: ' + (v.source_game || '\u2014') + ' &bull; Redeemed: ' + _fmtDateTime(v.redeemed_at) + '</div></div>';
-        html += '<div class="voucher-status redeemed">Redeemed</div>';
-        html += '</div>';
-      });
+  /* ── Vouchers ── */
+  var vs = _walletVouchers || [];
+  var avail = 0, redeemed = 0, availSum = 0;
+  for (var i = 0; i < vs.length; i++) {
+    if (vs[i].status === 'available') { avail++; availSum += parseFloat(vs[i].amount) || 0; }
+    else redeemed++;
+  }
+  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">';
+  html += '<span class="sec-title">Vouchers</span>';
+  html += '<span style="font-size:10px;color:#8a8f98;">' + avail + ' available (' + _fmtMoney(availSum) + ') &middot; ' + redeemed + ' redeemed</span>';
+  html += '</div>';
+
+  if (!vs.length) {
+    html += '<div class="empty-state">No vouchers for this player</div>';
+  } else {
+    for (var j = 0; j < vs.length; j++) {
+      var v = vs[j];
+      var isAvail = v.status === 'available';
+      var d = v.created_at ? new Date(v.created_at) : null;
+      html += '<div style="background:rgba(255,255,255,.03);border:1px solid ' +
+              (isAvail ? 'rgba(29,185,84,.35)' : 'rgba(255,255,255,.08)') +
+              ';border-radius:8px;padding:10px 12px;margin-bottom:6px;">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">';
+      html += '<div style="min-width:0;">';
+      html += '<div style="font-size:15px;font-weight:900;color:' + (isAvail ? '#1db954' : '#8a8f98') + ';">' + _fmtMoney(v.amount) + '</div>';
+      html += '<div style="font-size:9px;color:#8a8f98;letter-spacing:.5px;">' + _escHtml(_gameName(v.source_game)) +
+              (d ? ' &middot; ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '') + '</div>';
       html += '</div>';
+      html += '<span style="font-size:9px;font-weight:900;letter-spacing:1px;color:' + (isAvail ? '#1db954' : '#8a8f98') + ';">' +
+              (isAvail ? 'AVAILABLE' : 'REDEEMED') + '</span>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;">';
+      html += '<button onclick="wmEditVoucher(\'' + v.id + '\',' + (parseFloat(v.amount)||0) + ')" style="' + _wmBtn('#00cfff','9px') + '">EDIT AMOUNT</button>';
+      html += '<button onclick="wmToggleVoucher(\'' + v.id + '\',\'' + v.status + '\')" style="' + _wmBtn('#ffb020','9px') + '">' +
+              (isAvail ? 'MARK REDEEMED' : 'MAKE AVAILABLE') + '</button>';
+      html += '<button onclick="wmVoidVoucher(\'' + v.id + '\')" style="' + _wmBtn('#ff6b6b','9px') + '">VOID</button>';
+      html += '</div></div>';
     }
   }
 
   el.innerHTML = html;
+}
+
+function _wmBtn(color, fs) {
+  return 'background:rgba(255,255,255,.05);border:1px solid ' + color + '55;color:' + color +
+         ';border-radius:6px;padding:7px 11px;font-size:' + (fs || '10px') +
+         ';font-weight:900;letter-spacing:.5px;cursor:pointer;';
+}
+function _escHtml(t) {
+  return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _escq(t) { return String(t == null ? '' : t).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+/* Players seen anywhere — registry, wallets, or vouchers. */
+function _knownPlayers() {
+  var set = {};
+  (_playerRegistry || []).forEach(function(p) { if (p && p.nickname) set[p.nickname] = 1; });
+  (_wmPlayerCache || []).forEach(function(n) { if (n) set[n] = 1; });
+  return Object.keys(set).sort();
+}
+
+var _wmPlayerCache = [];
+function wmLoadPlayerList() {
+  if (!_client) return;
+  _client.from('wallet').select('nickname').order('nickname')
+    .then(function(r) {
+      if (!r.error && r.data) {
+        _wmPlayerCache = r.data.map(function(x) { return x.nickname; });
+        if (_activeTab === 'wallet') safeRender();
+      }
+    }).catch(function(){});
+}
+
+function wmPick(nick) {
+  _walletSearch = nick;
+  _walletData = undefined;
+  renderTab();
+  fetchWalletByNickname(nick, function(w, v) {
+    _walletData = w; _walletVouchers = v; renderTab();
+  });
+}
+
+function _wmAmtField() {
+  var f = document.getElementById('wm-amt');
+  var n = f ? parseFloat(f.value) : NaN;
+  if (isNaN(n) || n <= 0) { toast('Enter a valid amount first'); return null; }
+  return Math.round(n * 100) / 100;
+}
+
+function _wmAudit(action, amount, before, after, vid, note) {
+  if (!_client) return;
+  _client.from('wallet_audit').insert({
+    nickname: _walletSearch, action: action, amount: amount,
+    bal_before: before, bal_after: after, voucher_id: vid || null, note: note || null
+  }).then(function(){}).catch(function(){});
+}
+
+function _wmReload() {
+  fetchWalletByNickname(_walletSearch, function(w, v) {
+    _walletData = w; _walletVouchers = v; renderTab();
+  });
+}
+
+/* ── Balance: add / deduct ── */
+function wmAdjust(sign) {
+  var amt = _wmAmtField(); if (amt === null) return;
+  var before = _walletData ? parseFloat(_walletData.balance) || 0 : 0;
+  var delta = sign * amt;
+  if (delta < 0 && before + delta < 0) {
+    if (!confirm('This takes the balance negative (' + _fmtMoney(before + delta) + '). Continue?')) return;
+  }
+  _client.rpc('wallet_adjust_balance', { p_nickname: _walletSearch, p_delta: delta })
+    .then(function(r) {
+      if (r.error) { toast('Failed: ' + r.error.message); return; }
+      _wmAudit(delta > 0 ? 'BALANCE_ADD' : 'BALANCE_DEDUCT', Math.abs(delta), before, before + delta, null, 'floor manager');
+      toast((delta > 0 ? 'Added ' : 'Deducted ') + _fmtMoney(Math.abs(delta)));
+      _wmReload();
+    }).catch(function(e) { toast('Failed: ' + e.message); });
+}
+
+/* ── Balance: set to an explicit value ── */
+function wmSetBalance() {
+  var amt = _wmAmtField(); if (amt === null) return;
+  var before = _walletData ? parseFloat(_walletData.balance) || 0 : 0;
+  if (!confirm('Set ' + _walletSearch + " balance to " + _fmtMoney(amt) + '?\n(was ' + _fmtMoney(before) + ')')) return;
+  _client.rpc('operator_set_balance', { p_nickname: _walletSearch, p_new_balance: amt, p_reason: 'floor manager set' })
+    .then(function(r) {
+      if (r.error) { toast('Failed: ' + r.error.message); return; }
+      _wmAudit('BALANCE_SET', amt, before, amt, null, 'floor manager set');
+      toast('Balance set to ' + _fmtMoney(amt));
+      _wmReload();
+    }).catch(function(e) { toast('Failed: ' + e.message); });
+}
+
+/* ── Vouchers ── */
+function wmNewVoucher() {
+  var amt = _wmAmtField(); if (amt === null) return;
+  var max = _walletConfig ? parseFloat(_walletConfig.max_voucher_default) : null;
+  if (max && amt > max && !confirm('Above the platform max of ' + _fmtMoney(max) + '. Create anyway?')) return;
+  _client.from('vouchers').insert({
+    nickname: _walletSearch, amount: amt, status: 'available', source_game: 'operator'
+  }).then(function(r) {
+    if (r.error) { toast('Failed: ' + r.error.message); return; }
+    _wmAudit('VOUCHER_CREATE', amt, null, null, null, 'operator issued');
+    toast('Voucher created: ' + _fmtMoney(amt));
+    _wmReload();
+  }).catch(function(e) { toast('Failed: ' + e.message); });
+}
+
+function wmEditVoucher(vid, current) {
+  var raw = prompt('New amount for this voucher:', String(current));
+  if (raw === null) return;
+  var amt = parseFloat(raw);
+  if (isNaN(amt) || amt <= 0) { toast('Invalid amount'); return; }
+  amt = Math.round(amt * 100) / 100;
+  _client.from('vouchers').update({ amount: amt }).eq('id', vid)
+    .then(function(r) {
+      if (r.error) { toast('Failed: ' + r.error.message); return; }
+      _wmAudit('VOUCHER_EDIT', amt, current, amt, vid, 'amount changed');
+      toast('Voucher updated to ' + _fmtMoney(amt));
+      _wmReload();
+    }).catch(function(e) { toast('Failed: ' + e.message); });
+}
+
+function wmToggleVoucher(vid, status) {
+  var next = (status === 'available') ? 'redeemed' : 'available';
+  var patch = { status: next };
+  patch.redeemed_at = (next === 'redeemed') ? new Date().toISOString() : null;
+  _client.from('vouchers').update(patch).eq('id', vid)
+    .then(function(r) {
+      if (r.error) { toast('Failed: ' + r.error.message); return; }
+      _wmAudit('VOUCHER_' + next.toUpperCase(), null, null, null, vid, 'status -> ' + next);
+      toast('Voucher marked ' + next);
+      _wmReload();
+    }).catch(function(e) { toast('Failed: ' + e.message); });
+}
+
+function wmVoidVoucher(vid) {
+  if (!confirm('Void this voucher? It can no longer be redeemed.')) return;
+  _client.from('vouchers').update({ status: 'void' }).eq('id', vid)
+    .then(function(r) {
+      if (r.error) { toast('Failed: ' + r.error.message); return; }
+      _wmAudit('VOUCHER_VOID', null, null, null, vid, 'voided by operator');
+      toast('Voucher voided');
+      _wmReload();
+    }).catch(function(e) { toast('Failed: ' + e.message); });
 }
 
 var _walletSearchTimer = null;
