@@ -463,10 +463,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,s
    FLOOR MANAGER v2.0
    Stray-Pup LLC / The Turrelle Sisters LLC
    Gold Coins Casino
-   Cache: floor-v2.3
+   Cache: floor-v2.4
    ══════════════════════════════════════════════════════════════════════ */
 
-var CACHE_VER         = 'floor-v2.3';
+var CACHE_VER         = 'floor-v2.4';
 var SUPABASE_URL      = 'https://gdmmoeggkqsvqnqyrubx.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkbW1vZWdna3FzdnFucXlydWJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MDYzNTQsImV4cCI6MjA5NjM4MjM1NH0.i86afL3CMpmru4z3LZAbCJkxBiwo25QbwEji8tDBAis';
 var FLOOR_PIN_HASH    = 'a6b4d9f3c1e8720f95d4b2a78c3e1f06d9a7b542e3c8f1d6a4b9e27c5f0d2605';
@@ -875,7 +875,7 @@ function _connectedPlayers() {
 /* ── WALLET DATA FETCH ── */
 function fetchWalletByNickname(nick, cb) {
   if (!_client || !nick) { if (cb) cb(null, []); return; }
-  _client.from('wallet').select('*').eq('nickname', nick).limit(1)
+  _client.from('wallet').select('*').ilike('nickname', nick).limit(1)
     .then(function(res) {
       if (res.error || !res.data || res.data.length === 0) {
         if (cb) cb(null, []);
@@ -883,7 +883,7 @@ function fetchWalletByNickname(nick, cb) {
       }
       var w = res.data[0];
       /* Fetch vouchers */
-      _client.from('vouchers').select('*').eq('nickname', nick)
+      _client.from('vouchers').select('*').ilike('nickname', nick)
         .order('created_at', { ascending: false })
         .then(function(vres) {
           var vouchers = (vres.error) ? [] : (vres.data || []);
@@ -1670,9 +1670,17 @@ function _escq(t) { return String(t == null ? '' : t).replace(/\\/g,'\\\\').repl
 
 /* Players seen anywhere — registry, wallets, or vouchers. */
 function _knownPlayers() {
+  /* v2.4: de-duplicate case-insensitively. Players who typed capitals used to
+     appear twice ("Sasha" and "sasha") and were treated as separate people.
+     Nicknames are canonically lowercase, so we key on lower() and display
+     that — matching what the games write. */
   var set = {};
-  (_playerRegistry || []).forEach(function(p) { if (p && p.nickname) set[p.nickname] = 1; });
-  (_wmPlayerCache || []).forEach(function(n) { if (n) set[n] = 1; });
+  (_playerRegistry || []).forEach(function(p) {
+    if (p && p.nickname) set[String(p.nickname).toLowerCase().trim()] = 1;
+  });
+  (_wmPlayerCache || []).forEach(function(n) {
+    if (n) set[String(n).toLowerCase().trim()] = 1;
+  });
   return Object.keys(set).sort();
 }
 
@@ -1689,7 +1697,7 @@ function wmLoadPlayerList() {
 }
 
 function wmPick(nick) {
-  _walletSearch = nick;
+  _walletSearch = String(nick || '').toLowerCase().trim();   /* v2.4: canonical */
   _walletData = undefined;
   renderTab();
   fetchWalletByNickname(nick, function(w, v) {
@@ -1805,6 +1813,7 @@ function wmVoidVoucher(vid) {
 
 var _walletSearchTimer = null;
 function onWalletSearch(val) {
+  val = String(val || '').toLowerCase();   /* v2.4: case-insensitive search */
   _walletSearch = val.trim();
   _walletData = undefined; /* undefined = searching, null = not found */
   clearTimeout(_walletSearchTimer);
